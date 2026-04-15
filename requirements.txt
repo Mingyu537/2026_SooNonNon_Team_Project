@@ -5,16 +5,3 @@ numpy
 scikit-learn
 matplotlib
 seaborn
-xgboost
-lightgbm
-catboost
-tensorflow
-keras
-torch
-torchvision
-scipy
-statsmodels
-nltk
-spacy
-gensim
-wordcloud
