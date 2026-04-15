@@ -1,5 +1,4 @@
-import math
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -64,6 +63,23 @@ def inject_glassmorphism_css() -> None:
             font-weight: 700;
             color: #1b3865;
         }
+        .section-title {
+            font-size: 1.05rem;
+            color: #264b7a;
+            margin-bottom: 0.35rem;
+            font-weight: 700;
+        }
+        .note-chip {
+            display: inline-block;
+            background: rgba(196, 220, 255, 0.60);
+            border-radius: 999px;
+            border: 1px solid rgba(123, 167, 228, 0.5);
+            padding: 0.15rem 0.7rem;
+            margin-right: 0.3rem;
+            margin-top: 0.2rem;
+            font-size: 0.84rem;
+            color: #234a79;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -81,6 +97,10 @@ def render_header() -> None:
                 학생은 매개변수를 바꾸고 그래프를 애니메이션으로 관찰하며,
                 수열의 규칙이 함수의 형태와 어떻게 연결되는지 스스로 의미를 구성할 수 있습니다.
             </p>
+            <span class="note-chip">선행조직자</span>
+            <span class="note-chip">점진적 분화</span>
+            <span class="note-chip">통합적 조정</span>
+            <span class="note-chip">능동적 의미 형성</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -116,15 +136,44 @@ def render_result_box(lines: List[str]) -> None:
 # 수열 생성 / 재구성 함수
 # -----------------------------
 def generate_arithmetic_sequence(a1: float, d: float, n_terms: int) -> Tuple[np.ndarray, np.ndarray]:
+    """등차수열 생성: a_n = a1 + (n-1)d"""
     n = np.arange(1, n_terms + 1)
     a_n = a1 + (n - 1) * d
     return n, a_n
 
 
 def generate_geometric_sequence(g1: float, r: float, n_terms: int) -> Tuple[np.ndarray, np.ndarray]:
+    """등비수열 생성: g_n = g1 * r^(n-1)"""
     n = np.arange(1, n_terms + 1)
-    g_n = g1 * np.power(r, n - 1)
+    with np.errstate(over="ignore", invalid="ignore"):
+        g_n = g1 * np.power(r, n - 1)
     return n, g_n
+
+
+def safe_continuous_exponential(g1: float, r: float, x_cont: np.ndarray) -> Optional[np.ndarray]:
+    """
+    연속 지수함수 y=g1*r^(x-1)를 안전하게 계산한다.
+    - r<=0 이면 연속 실수 지수함수로 해석하기 어려우므로 None 반환
+    - overflow/NaN이 포함되면 None 반환
+    """
+    if r <= 0:
+        return None
+    with np.errstate(over="ignore", invalid="ignore"):
+        y_cont = g1 * np.power(r, x_cont - 1)
+    if not np.all(np.isfinite(y_cont)):
+        return None
+    return y_cont
+
+
+def validate_finite_array(values: np.ndarray, context_label: str) -> bool:
+    """배열에 inf/nan이 없는지 검사하고 학습 친화적 메시지를 출력."""
+    if np.any(~np.isfinite(values)):
+        st.error(
+            f"{context_label} 계산 중 값이 너무 커져(또는 정의되지 않아) 그래프를 표시할 수 없습니다. "
+            "항의 개수(n)나 공차/공비 절댓값을 더 작게 조정해 보세요."
+        )
+        return False
+    return True
 
 
 def reconstruct_arithmetic(
@@ -136,8 +185,9 @@ def reconstruct_arithmetic(
     b1: float,
     db: float,
 ) -> Dict[str, object]:
+    """등차수열 재구성 연산 실행"""
     n, a_n = generate_arithmetic_sequence(a1, d, n_terms)
-    n2, b_n = generate_arithmetic_sequence(b1, db, n_terms)
+    _, b_n = generate_arithmetic_sequence(b1, db, n_terms)
 
     if op == "원래 등차수열 (a_n)":
         values = a_n
@@ -186,6 +236,7 @@ def reconstruct_geometric(
     h1: float,
     s: float,
 ) -> Dict[str, object]:
+    """등비수열 재구성 연산 실행 (정의역 검증 포함)"""
     n, g_n = generate_geometric_sequence(g1, r, n_terms)
     _, h_n = generate_geometric_sequence(h1, s, n_terms)
 
@@ -246,8 +297,9 @@ def build_animation_figure(
     y_title: str,
 ) -> go.Figure:
     """점 + 연속함수를 순차적으로 그리는 Plotly 애니메이션"""
-    frames = []
+    frames: List[go.Frame] = []
     total = len(x_cont)
+
     for i in range(2, total + 1):
         x_partial = x_cont[:i]
         y_partial = y_cont[:i]
@@ -329,6 +381,23 @@ def build_animation_figure(
     return fig
 
 
+def build_discrete_only_figure(n_points: np.ndarray, seq_values: np.ndarray, title: str) -> go.Figure:
+    """연속 확장이 어려운 경우(공비<=0) 점 중심 그래프 표시"""
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=n_points,
+            y=seq_values,
+            mode="markers+lines",
+            name=title,
+            marker=dict(size=10, color="#113b88"),
+            line=dict(color="#6c88c2", width=2),
+        )
+    )
+    fig.update_layout(template="plotly_white", height=430, xaxis_title="항 번호 n", yaxis_title="값")
+    return fig
+
+
 # -----------------------------
 # 유틸 / 입력 예시 로딩
 # -----------------------------
@@ -347,7 +416,12 @@ def load_arith_example(idx: int) -> None:
         {"a1": -4.0, "d": 3.0, "n": 10, "b1": 5.0, "db": 2.0, "k": -1.5},
         {"a1": 10.0, "d": -1.0, "n": 15, "b1": -2.0, "db": 4.0, "k": 0.5},
     ]
-    st.session_state["params"]["arith"] = examples[idx]
+    ex = examples[idx]
+    st.session_state["params"]["arith"] = ex
+    # 비교 탭 위젯 키까지 동기화하여 버튼 클릭 즉시 반영
+    st.session_state["cmp_a1"] = ex["a1"]
+    st.session_state["cmp_d"] = ex["d"]
+    st.session_state["cmp_n_a"] = ex["n"]
 
 
 def load_geo_example(idx: int) -> None:
@@ -356,7 +430,11 @@ def load_geo_example(idx: int) -> None:
         {"g1": 64.0, "r": 0.5, "n": 10, "h1": 2.0, "s": 0.5, "k": 0.25},
         {"g1": -3.0, "r": 2.0, "n": 8, "h1": -1.0, "s": 2.0, "k": -2.0},
     ]
-    st.session_state["params"]["geo"] = examples[idx]
+    ex = examples[idx]
+    st.session_state["params"]["geo"] = ex
+    st.session_state["cmp_g1"] = ex["g1"]
+    st.session_state["cmp_r"] = ex["r"]
+    st.session_state["cmp_n_g"] = ex["n"]
 
 
 def validate_common_n(n_terms: int) -> bool:
@@ -364,6 +442,20 @@ def validate_common_n(n_terms: int) -> bool:
         st.warning("항의 개수 n은 3 이상 40 이하로 설정해 주세요. 그래프 관찰에 적절한 범위입니다.")
         return False
     return True
+
+
+def render_ratio_interpretation(r: float) -> None:
+    """공비에 따른 해석 안내"""
+    if np.isclose(r, 1.0):
+        st.info("공비 r=1이면 모든 항이 같은 상수수열이 됩니다.")
+    elif np.isclose(r, 0.0):
+        st.info("공비 r=0이면 첫째항 이후 모든 항이 0이 됩니다. 연속 지수함수 연결은 제한적입니다.")
+    elif r < 0:
+        st.warning("공비가 음수이면 항의 부호가 번갈아 나타납니다. 연속 지수함수와 직접 연결하기는 어렵습니다.")
+    elif 0 < r < 1:
+        st.info("0<r<1이면 지수적으로 감소하는 패턴입니다.")
+    else:
+        st.info("r>1이면 지수적으로 증가하는 패턴입니다.")
 
 
 # -----------------------------
@@ -395,18 +487,20 @@ def render_tab_concept() -> None:
 
 def render_tab_compare() -> None:
     st.markdown("### 점진적 분화 1단계: 수열의 점과 대응 함수 비교")
-    params_a = st.session_state["params"]["arith"]
-    params_g = st.session_state["params"]["geo"]
 
     left, right = st.columns(2)
     with left:
-        st.markdown("#### 등차수열 설정")
-        if st.button("등차 예시 1", use_container_width=True):
-            load_arith_example(0)
-        if st.button("등차 예시 2", use_container_width=True):
-            load_arith_example(1)
-        if st.button("등차 예시 3", use_container_width=True):
-            load_arith_example(2)
+        st.markdown("<div class='section-title'>등차수열 설정</div>", unsafe_allow_html=True)
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            if st.button("등차 예시 1", use_container_width=True):
+                load_arith_example(0)
+        with b2:
+            if st.button("등차 예시 2", use_container_width=True):
+                load_arith_example(1)
+        with b3:
+            if st.button("등차 예시 3", use_container_width=True):
+                load_arith_example(2)
 
         params_a = st.session_state["params"]["arith"]
         a1 = st.number_input("a₁", value=float(params_a["a1"]), key="cmp_a1")
@@ -415,43 +509,53 @@ def render_tab_compare() -> None:
 
         if validate_common_n(n_a):
             n, vals = generate_arithmetic_sequence(a1, d, n_a)
-            x_cont = np.linspace(1, n_a, 220)
-            y_cont = a1 + (x_cont - 1) * d
-            st.latex(rf"a_n = {a1:.4g} + (n-1)({d:.4g})")
-            st.latex(rf"y = {a1:.4g} + (x-1)({d:.4g})")
-            fig = build_animation_figure(n, vals, x_cont, y_cont, "등차수열 점", "일차함수", "값")
-            st.plotly_chart(fig, use_container_width=True)
+            if validate_finite_array(vals, "등차수열"):
+                x_cont = np.linspace(1, n_a, 220)
+                y_cont = a1 + (x_cont - 1) * d
+                if validate_finite_array(y_cont, "등차수열 대응 일차함수"):
+                    st.latex(rf"a_n = {a1:.4g} + (n-1)({d:.4g})")
+                    st.latex(rf"y = {a1:.4g} + (x-1)({d:.4g})")
+                    fig = build_animation_figure(n, vals, x_cont, y_cont, "등차수열 점", "일차함수", "값")
+                    st.plotly_chart(fig, use_container_width=True)
 
     with right:
-        st.markdown("#### 등비수열 설정")
-        if st.button("등비 예시 1", use_container_width=True):
-            load_geo_example(0)
-        if st.button("등비 예시 2", use_container_width=True):
-            load_geo_example(1)
-        if st.button("등비 예시 3", use_container_width=True):
-            load_geo_example(2)
+        st.markdown("<div class='section-title'>등비수열 설정</div>", unsafe_allow_html=True)
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            if st.button("등비 예시 1", use_container_width=True):
+                load_geo_example(0)
+        with b2:
+            if st.button("등비 예시 2", use_container_width=True):
+                load_geo_example(1)
+        with b3:
+            if st.button("등비 예시 3", use_container_width=True):
+                load_geo_example(2)
 
         params_g = st.session_state["params"]["geo"]
         g1 = st.number_input("g₁", value=float(params_g["g1"]), key="cmp_g1")
         r = st.number_input("r (기본 모드: 양수 권장)", value=float(params_g["r"]), key="cmp_r")
-        n_g = st.slider("항의 개수 n ", 3, 40, int(params_g["n"]), key="cmp_n_g")
+        n_g = st.slider("항의 개수 n", 3, 40, int(params_g["n"]), key="cmp_n_g")
 
         if validate_common_n(n_g):
-            if r <= 0:
-                st.warning("연속 지수함수와 직접 연결하려면 공비 r은 양수로 제한하는 것이 적절합니다. 현재는 점(수열) 중심으로 해석하세요.")
+            render_ratio_interpretation(r)
             n, vals = generate_geometric_sequence(g1, r, n_g)
-            st.latex(rf"g_n = {g1:.4g}({r:.4g})^{{n-1}}")
-            if r > 0:
-                x_cont = np.linspace(1, n_g, 260)
-                y_cont = g1 * np.power(r, x_cont - 1)
-                st.latex(rf"y = {g1:.4g}({r:.4g})^{{x-1}}")
-                fig = build_animation_figure(n, vals, x_cont, y_cont, "등비수열 점", "지수함수", "값")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=n, y=vals, mode="markers+lines", name="등비수열 점", marker=dict(size=10)))
-                fig.update_layout(template="plotly_white", height=430, xaxis_title="항 번호 n", yaxis_title="g_n")
-                st.plotly_chart(fig, use_container_width=True)
+            if validate_finite_array(vals, "등비수열"):
+                st.latex(rf"g_n = {g1:.4g}({r:.4g})^{{n-1}}")
+                if r > 0:
+                    x_cont = np.linspace(1, n_g, 260)
+                    y_cont = safe_continuous_exponential(g1, r, x_cont)
+                    if y_cont is None:
+                        st.warning("연속 지수함수 값이 너무 크거나 정의되지 않아 점(수열) 그래프로만 표시합니다.")
+                        fig = build_discrete_only_figure(n, vals, "등비수열 점")
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.latex(rf"y = {g1:.4g}({r:.4g})^{{x-1}}")
+                        fig = build_animation_figure(n, vals, x_cont, y_cont, "등비수열 점", "지수함수", "값")
+                        st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("연속 지수함수와 직접 연결하려면 공비 r은 양수로 제한하는 것이 적절합니다.")
+                    fig = build_discrete_only_figure(n, vals, "등비수열 점")
+                    st.plotly_chart(fig, use_container_width=True)
 
 
 def render_tab_reconstruct() -> None:
@@ -480,10 +584,12 @@ def render_tab_reconstruct() -> None:
             st.success("재구성 완료! 결과가 다시 등차수열인지 확인해 보세요.")
             st.latex(rf"{result['expr']}")
             st.dataframe(result["table"].head(10), use_container_width=True)
-            x_cont = np.linspace(1, n_terms, 240)
-            y_cont = new_a1 + (x_cont - 1) * new_d
-            fig = build_animation_figure(n, vals, x_cont, y_cont, "재구성 점", "대응 일차함수", "값")
-            st.plotly_chart(fig, use_container_width=True)
+            if validate_finite_array(vals, "재구성 등차수열"):
+                x_cont = np.linspace(1, n_terms, 240)
+                y_cont = new_a1 + (x_cont - 1) * new_d
+                if validate_finite_array(y_cont, "재구성 등차수열 대응 일차함수"):
+                    fig = build_animation_figure(n, vals, x_cont, y_cont, "재구성 점", "대응 일차함수", "값")
+                    st.plotly_chart(fig, use_container_width=True)
             render_result_box([
                 "현재 선택한 재구성 결과는 <b>등차수열</b>입니다.",
                 "대응 함수는 <b>일차함수</b>입니다.",
@@ -494,12 +600,12 @@ def render_tab_reconstruct() -> None:
         st.markdown("#### B. 등비수열 재구성")
         g1 = st.number_input("기본 g₁", value=2.0, key="rec_g1")
         r = st.number_input("기본 r (양수 권장)", value=1.5, key="rec_r")
-        n_terms = st.slider("기본 n ", 3, 40, 10, key="rec_ng")
+        n_terms = st.slider("기본 n", 3, 40, 10, key="rec_ng")
         h1 = st.number_input("두 번째 h₁", value=1.0, key="rec_h1")
         s = st.number_input("두 번째 s", value=0.5, key="rec_s")
-        k = st.number_input("스칼라 k ", value=3.0, key="rec_kg")
+        k = st.number_input("스칼라 k", value=3.0, key="rec_kg")
         op = st.selectbox(
-            "재구성 선택 ",
+            "재구성 선택",
             ["원래 등비수열 (g_n)", "스칼라배 (k·g_n)", "두 등비수열의 곱 (g_n · h_n)", "두 등비수열의 나눗셈 (g_n / h_n)"],
             key="op_g",
         )
@@ -513,26 +619,27 @@ def render_tab_reconstruct() -> None:
                 st.success("재구성 완료! 비의 구조가 유지되는지 관찰해 보세요.")
                 st.latex(rf"{result['expr']}")
                 st.dataframe(result["table"].head(10), use_container_width=True)
-                if new_r > 0:
-                    x_cont = np.linspace(1, n_terms, 280)
-                    y_cont = new_g1 * np.power(new_r, x_cont - 1)
-                    fig = build_animation_figure(n, vals, x_cont, y_cont, "재구성 점", "대응 지수함수", "값")
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning("새 공비가 0 이하이면 연속 지수함수로 직접 확장하기 어렵습니다. 점(수열) 관찰 중심으로 해석하세요.")
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=n, y=vals, mode="markers+lines", name="재구성 점"))
-                    fig.update_layout(template="plotly_white", height=430, xaxis_title="항 번호 n", yaxis_title="값")
-                    st.plotly_chart(fig, use_container_width=True)
+                render_ratio_interpretation(new_r)
+                if validate_finite_array(vals, "재구성 등비수열"):
+                    if new_r > 0:
+                        x_cont = np.linspace(1, n_terms, 280)
+                        y_cont = safe_continuous_exponential(new_g1, new_r, x_cont)
+                        if y_cont is None:
+                            st.warning("연속 지수함수 값이 너무 크거나 정의되지 않아 점(수열) 그래프로만 표시합니다.")
+                            fig = build_discrete_only_figure(n, vals, "재구성 점")
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            fig = build_animation_figure(n, vals, x_cont, y_cont, "재구성 점", "대응 지수함수", "값")
+                            st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.warning("새 공비가 0 이하이면 연속 지수함수로 직접 확장하기 어렵습니다. 점(수열) 관찰 중심으로 해석하세요.")
+                        fig = build_discrete_only_figure(n, vals, "재구성 점")
+                        st.plotly_chart(fig, use_container_width=True)
 
-                extra = "공비가 1이면 상수수열, 0<공비<1이면 감소, 공비>1이면 증가 패턴을 보입니다."
-                if np.isclose(new_r, 1.0):
-                    extra = "공비가 1이므로 모든 항이 같은 상수수열입니다."
                 render_result_box([
                     "현재 선택한 재구성 결과는 <b>등비수열</b>입니다.",
                     "대응 함수는 <b>지수함수</b>입니다(공비 양수 조건).",
                     result["why"],
-                    extra,
                 ])
             except ValueError as e:
                 st.error(f"입력값을 다시 확인해 주세요: {e}")
