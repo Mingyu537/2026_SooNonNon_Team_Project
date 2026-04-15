@@ -1,84 +1,193 @@
-from typing import Dict, List, Tuple
+import importlib
+import math
+from fractions import Fraction
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
+
+try:
+    go = importlib.import_module("plotly.graph_objects")
+    pio = importlib.import_module("plotly.io")
+    PLOTLY_AVAILABLE = True
+except ModuleNotFoundError:
+    go = None
+    pio = None
+    PLOTLY_AVAILABLE = False
 
 
-# -----------------------------
-# UI 스타일 / 공통 렌더 함수
-# -----------------------------
-def inject_glassmorphism_css() -> None:
-    """Apple 스타일의 글래스모피즘 느낌 CSS 주입"""
+st.set_page_config(
+    page_title="등차수열과 등비수열의 재구성",
+    page_icon="📘",
+    layout="wide",
+)
+
+# 주요 세션 상태 기본값을 한 번에 초기화한다.
+STATE_DEFAULTS: Dict[str, Any] = {
+    "cmp_arith_a1": 2.0,
+    "cmp_arith_d": 3.0,
+    "cmp_arith_n": 8,
+    "cmp_arith_drawn": False,
+    "cmp_arith_nonce": 0,
+    "cmp_geo_g1": 3.0,
+    "cmp_geo_r": 1.5,
+    "cmp_geo_n": 7,
+    "cmp_geo_drawn": False,
+    "cmp_geo_nonce": 0,
+    "rec_arith_a1": 1.0,
+    "rec_arith_d": 2.0,
+    "rec_arith_n": 8,
+    "rec_arith_b1": 4.0,
+    "rec_arith_db": -1.0,
+    "rec_arith_k": 2.0,
+    "rec_arith_operation": "원래 수열 a_n",
+    "rec_arith_drawn": False,
+    "rec_arith_nonce": 0,
+    "rec_geo_g1": 2.0,
+    "rec_geo_r": 2.0,
+    "rec_geo_n": 7,
+    "rec_geo_h1": 3.0,
+    "rec_geo_s": 1.5,
+    "rec_geo_k": 2.0,
+    "rec_geo_operation": "원래 수열 g_n",
+    "rec_geo_drawn": False,
+    "rec_geo_nonce": 0,
+}
+
+
+def initialize_session_state() -> None:
+    """앱 첫 실행 시 필요한 세션 상태를 채운다."""
+    for key, value in STATE_DEFAULTS.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def inject_css() -> None:
+    """글래스모피즘 분위기의 내부 CSS를 주입한다."""
     st.markdown(
         """
         <style>
         .stApp {
             background:
-                radial-gradient(circle at 15% 20%, rgba(173, 216, 255, 0.35), transparent 40%),
-                radial-gradient(circle at 85% 10%, rgba(220, 235, 255, 0.50), transparent 35%),
-                linear-gradient(160deg, #eef3fb 0%, #e7edf7 45%, #eff4fc 100%);
-            color: #1f2a44;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+                radial-gradient(circle at top left, rgba(181, 212, 255, 0.45), transparent 28%),
+                radial-gradient(circle at top right, rgba(202, 227, 255, 0.38), transparent 22%),
+                linear-gradient(180deg, #eef5ff 0%, #e9f1fb 45%, #f7f9fc 100%);
+            color: #17324d;
+        }
+        .main .block-container {
+            padding-top: 2rem;
+            padding-bottom: 3rem;
+            max-width: 1200px;
+        }
+        .hero-card, .glass-card {
+            background: rgba(255, 255, 255, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            box-shadow: 0 16px 40px rgba(68, 101, 140, 0.12);
+            border-radius: 24px;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+        .hero-card {
+            padding: 1.6rem 1.8rem;
+            margin-bottom: 1.15rem;
         }
         .glass-card {
-            background: rgba(255, 255, 255, 0.50);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            border-radius: 18px;
-            padding: 18px 20px;
-            margin-bottom: 14px;
-            box-shadow: 0 8px 24px rgba(17, 40, 85, 0.10);
+            padding: 1.1rem 1.2rem;
+            margin-bottom: 1rem;
         }
-        .header-card {
-            background: rgba(255, 255, 255, 0.56);
-            border-radius: 24px;
-            padding: 24px 28px;
-            border: 1px solid rgba(255,255,255,0.4);
-            box-shadow: 0 12px 28px rgba(16, 45, 90, 0.12);
-            margin-bottom: 20px;
-        }
-        .small-muted {
-            color: #4c5e7f;
-            font-size: 0.95rem;
-        }
-        .result-box {
-            background: rgba(227, 240, 255, 0.55);
-            border: 1px solid rgba(148, 185, 235, 0.45);
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin: 10px 0;
-            color: #17345f;
-        }
-        .teacher-box {
-            background: rgba(240, 248, 255, 0.62);
-            border-left: 4px solid #4f81d9;
-            border-radius: 10px;
-            padding: 12px 14px;
-            margin-top: 8px;
-        }
-        .kpi {
+        .hero-title {
+            font-size: 2rem;
             font-weight: 700;
-            color: #1b3865;
+            color: #10263d;
+            margin-bottom: 0.35rem;
+            line-height: 1.35;
+        }
+        .hero-subtitle {
+            font-size: 1rem;
+            color: #36506c;
+            margin-bottom: 0.9rem;
+        }
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .info-chip {
+            display: inline-block;
+            padding: 0.35rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(84, 138, 214, 0.12);
+            border: 1px solid rgba(84, 138, 214, 0.18);
+            color: #23496d;
+            font-size: 0.92rem;
+            font-weight: 600;
         }
         .section-title {
-            font-size: 1.05rem;
-            color: #264b7a;
-            margin-bottom: 0.35rem;
+            font-size: 1.15rem;
             font-weight: 700;
+            color: #13304f;
+            margin-bottom: 0.45rem;
         }
-        .note-chip {
-            display: inline-block;
-            background: rgba(196, 220, 255, 0.60);
-            border-radius: 999px;
-            border: 1px solid rgba(123, 167, 228, 0.5);
-            padding: 0.15rem 0.7rem;
-            margin-right: 0.3rem;
-            margin-top: 0.2rem;
-            font-size: 0.84rem;
-            color: #234a79;
+        .section-body {
+            color: #35516e;
+            line-height: 1.7;
+            font-size: 0.98rem;
+        }
+        .summary-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            color: #123452;
+        }
+        .summary-list {
+            margin: 0;
+            padding-left: 1.2rem;
+            color: #35516e;
+            line-height: 1.65;
+        }
+        .small-note {
+            color: #54708d;
+            font-size: 0.9rem;
+        }
+        .teacher-prompt {
+            background: rgba(240, 247, 255, 0.9);
+            border: 1px solid rgba(119, 163, 219, 0.22);
+            border-radius: 18px;
+            padding: 0.85rem 1rem;
+            margin-bottom: 0.7rem;
+            color: #23435f;
+        }
+        div[data-baseweb="tab-list"] {
+            gap: 0.35rem;
+            margin-bottom: 0.65rem;
+        }
+        button[data-baseweb="tab"] {
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.45);
+            border: 1px solid rgba(160, 190, 225, 0.32);
+            padding: 0.55rem 0.95rem;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background: rgba(130, 176, 235, 0.22);
+        }
+        .stButton > button {
+            border-radius: 14px;
+            border: 1px solid rgba(111, 156, 213, 0.25);
+            background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(233,243,255,0.94));
+            color: #163550;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(92, 135, 188, 0.12);
+        }
+        div[data-testid="stMetricValue"] {
+            color: #16324d;
+        }
+        div[data-testid="stDataFrame"] {
+            border-radius: 18px;
+            overflow: hidden;
+            border: 1px solid rgba(180, 204, 231, 0.35);
+            box-shadow: 0 10px 30px rgba(80, 118, 168, 0.08);
         }
         </style>
         """,
@@ -87,591 +196,1157 @@ def inject_glassmorphism_css() -> None:
 
 
 def render_header() -> None:
+    """상단 제목과 선행조직자 역할을 하는 안내를 그린다."""
     st.markdown(
         """
-        <div class="header-card">
-            <h1 style="margin-bottom:8px;">등차수열과 등비수열의 재구성: 함수와 연결하여 이해하기</h1>
-            <h4 style="margin-top:0; color:#355a8a;">수열의 점과 함수의 그래프를 비교하며 규칙의 구조를 탐구하는 수업용 앱</h4>
-            <p class="small-muted">
-                이 앱은 2차시 수업에서 <b>비교 → 재구성 → 통합적 이해</b>의 흐름으로 학습하도록 설계되었습니다.
-                학생은 매개변수를 바꾸고 그래프를 애니메이션으로 관찰하며,
-                수열의 규칙이 함수의 형태와 어떻게 연결되는지 스스로 의미를 구성할 수 있습니다.
-            </p>
-            <span class="note-chip">선행조직자</span>
-            <span class="note-chip">점진적 분화</span>
-            <span class="note-chip">통합적 조정</span>
-            <span class="note-chip">능동적 의미 형성</span>
+        <div class="hero-card">
+            <div class="hero-title">등차수열과 등비수열의 재구성: 함수와 연결하여 이해하기</div>
+            <div class="hero-subtitle">수열의 점과 함수의 그래프를 비교하며 규칙의 구조를 탐구하는 수업용 앱</div>
+            <div class="chip-row">
+                <span class="info-chip">등차수열은 자연수에서 정의된 일차적 규칙</span>
+                <span class="info-chip">등비수열은 자연수에서 정의된 지수적 규칙</span>
+                <span class="info-chip">수열은 점, 함수는 연속 그래프</span>
+                <span class="info-chip">규칙의 구조는 서로 연결 가능</span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def render_explanation_card(title: str, body: str) -> None:
+def render_summary_card(title: str, lines: list[str]) -> None:
+    """짧은 요약을 담는 카드형 박스를 표시한다."""
+    line_html = "".join(f"<li>{line}</li>" for line in lines)
     st.markdown(
         f"""
         <div class="glass-card">
-            <h4 style="margin: 0 0 8px 0;">{title}</h4>
-            <p style="margin:0; line-height:1.7;">{body}</p>
+            <div class="summary-title">{title}</div>
+            <ul class="summary-list">{line_html}</ul>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def render_result_box(lines: List[str]) -> None:
-    html = "".join([f"<li>{line}</li>" for line in lines])
-    st.markdown(
-        f"""
-        <div class="result-box">
-            <div class="kpi">결과 요약</div>
-            <ul style="margin-top:8px; margin-bottom:2px;">{html}</ul>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def format_number(value: float) -> str:
+    """표와 설명에 쓰기 좋은 숫자 문자열로 바꾼다."""
+    if value is None or not np.isfinite(value):
+        return "정의되지 않음"
+    if math.isclose(value, 0.0, abs_tol=1e-10):
+        return "0"
+    if math.isclose(value, round(value), abs_tol=1e-10):
+        return str(int(round(value)))
+    abs_value = abs(value)
+    if abs_value >= 1_000_000 or (0 < abs_value < 0.0001):
+        return f"{value:.3e}"
+    return f"{value:.4f}".rstrip("0").rstrip(".")
+
+
+def is_close_zero(value: float) -> bool:
+    """거의 0인지 판별한다."""
+    return math.isclose(value, 0.0, abs_tol=1e-10)
+
+
+def is_close_one(value: float) -> bool:
+    """거의 1인지 판별한다."""
+    return math.isclose(value, 1.0, abs_tol=1e-10)
+
+
+def format_latex_number(value: float) -> str:
+    """LaTeX 표시에 적절한 숫자 문자열을 만든다."""
+    if value is None or not np.isfinite(value):
+        return r"\text{정의되지 않음}"
+    if is_close_zero(value):
+        return "0"
+    fraction = Fraction(value).limit_denominator(1000)
+    if abs(float(fraction) - value) < 1e-10:
+        if fraction.denominator == 1:
+            return str(fraction.numerator)
+        return rf"\frac{{{fraction.numerator}}}{{{fraction.denominator}}}"
+    return format_number(value)
+
+
+def format_power_base_latex(value: float) -> str:
+    """지수의 밑으로 쓸 숫자를 LaTeX로 안전하게 만든다."""
+    base = format_latex_number(value)
+    if "\\" in base or value < 0 or not math.isclose(value, round(value), abs_tol=1e-10):
+        return rf"\left({base}\right)"
+    return base
+
+
+def format_coefficient_text(coefficient: float, token: str) -> str:
+    """선형식 항의 텍스트 계수를 만든다."""
+    if is_close_zero(coefficient):
+        return "0"
+    if is_close_one(coefficient):
+        return token
+    if math.isclose(coefficient, -1.0, abs_tol=1e-10):
+        return f"-{token}"
+    return f"{format_number(coefficient)}{token}"
+
+
+def format_coefficient_latex(coefficient: float, token: str) -> str:
+    """선형식 항의 LaTeX 계수를 만든다."""
+    if is_close_zero(coefficient):
+        return "0"
+    if is_close_one(coefficient):
+        return token
+    if math.isclose(coefficient, -1.0, abs_tol=1e-10):
+        return f"-{token}"
+    return rf"{format_latex_number(coefficient)}{token}"
+
+
+def arithmetic_expr_text(a1: float, d: float, variable: str = "n") -> str:
+    """등차수열 또는 대응 함수의 식을 텍스트로 만든다."""
+    if is_close_zero(d):
+        return format_number(a1)
+    token = f"({variable}-1)"
+    if is_close_zero(a1):
+        return format_coefficient_text(d, token)
+    sign = "+" if d > 0 else "-"
+    return f"{format_number(a1)} {sign} {format_coefficient_text(abs(d), token)}"
+
+
+def arithmetic_expr_latex(a1: float, d: float, variable: str = "n") -> str:
+    """등차수열 또는 대응 함수의 식을 LaTeX로 만든다."""
+    if is_close_zero(d):
+        return format_latex_number(a1)
+    token = rf"\left({variable}-1\right)"
+    if is_close_zero(a1):
+        return format_coefficient_latex(d, token)
+    sign = "+" if d > 0 else "-"
+    return rf"{format_latex_number(a1)} {sign} {format_coefficient_latex(abs(d), token)}"
+
+
+def geometric_expr_text(g1: float, r: float, variable: str = "n") -> str:
+    """등비수열 또는 대응 함수의 식을 텍스트로 만든다."""
+    if is_close_zero(g1):
+        return "0"
+    if is_close_one(r):
+        return format_number(g1)
+    base = format_number(r)
+    if (not math.isclose(r, round(r), abs_tol=1e-10)) or r < 0:
+        base = f"({base})"
+    power = f"{base}^({variable}-1)"
+    if is_close_one(g1):
+        return power
+    if math.isclose(g1, -1.0, abs_tol=1e-10):
+        return f"-{power}"
+    return f"{format_number(g1)}·{power}"
+
+
+def geometric_expr_latex(g1: float, r: float, variable: str = "n") -> str:
+    """등비수열 또는 대응 함수의 식을 LaTeX로 만든다."""
+    if is_close_zero(g1):
+        return "0"
+    if is_close_one(r):
+        return format_latex_number(g1)
+    power = rf"{format_power_base_latex(r)}^{{{variable}-1}}"
+    if is_close_one(g1):
+        return power
+    if math.isclose(g1, -1.0, abs_tol=1e-10):
+        return rf"-{power}"
+    return rf"{format_latex_number(g1)} \cdot {power}"
+
+
+def arithmetic_sequence(a1: float, d: float, count: int) -> Tuple[np.ndarray, np.ndarray]:
+    """등차수열의 항 번호와 값을 생성한다."""
+    indices = np.arange(1, count + 1, dtype=float)
+    values = a1 + (indices - 1) * d
+    return indices, values.astype(float)
+
+
+def geometric_sequence(g1: float, r: float, count: int) -> Tuple[np.ndarray, np.ndarray]:
+    """등비수열의 항 번호와 값을 생성한다."""
+    indices = np.arange(1, count + 1, dtype=float)
+    with np.errstate(over="ignore", invalid="ignore"):
+        values = g1 * np.power(r, indices - 1)
+    return indices, values.astype(float)
+
+
+def make_term_dataframe(indices: np.ndarray, values: np.ndarray, column_name: str) -> pd.DataFrame:
+    """수열의 앞부분 항을 표로 정리한다."""
+    return pd.DataFrame(
+        {
+            "항 번호": [int(x) for x in indices],
+            column_name: [format_number(v) for v in values],
+        }
     )
 
 
-# -----------------------------
-# 수열 생성 / 재구성 함수
-# -----------------------------
-def generate_arithmetic_sequence(a1: float, d: float, n_terms: int) -> Tuple[np.ndarray, np.ndarray]:
-    """등차수열 생성: a_n = a1 + (n-1)d"""
-    n = np.arange(1, n_terms + 1)
-    a_n = a1 + (n - 1) * d
-    return n, a_n
+def build_message_figure(title: str, message: str) -> Any:
+    """입력 전 또는 오류 상황에서 안내용 빈 그래프를 만든다."""
+    if not PLOTLY_AVAILABLE:
+        return None
+    fig = go.Figure()
+    fig.add_annotation(
+        text=message,
+        x=0.5,
+        y=0.5,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        font=dict(size=16, color="#35516e"),
+    )
+    fig.update_layout(
+        title=title,
+        height=470,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.7)",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        margin=dict(l=30, r=30, t=70, b=30),
+    )
+    return fig
 
 
-def generate_geometric_sequence(g1: float, r: float, n_terms: int) -> Tuple[np.ndarray, np.ndarray]:
-    """등비수열 생성: g_n = g1 * r^(n-1)"""
-    n = np.arange(1, n_terms + 1)
-    g_n = g1 * np.power(r, n - 1)
-    return n, g_n
+def validate_finite_values(values: np.ndarray) -> bool:
+    """그래프에 표시 가능한 유한한 값인지 검사한다."""
+    return bool(np.all(np.isfinite(values)))
 
 
-def reconstruct_arithmetic(
-    op: str,
-    a1: float,
-    d: float,
-    n_terms: int,
-    k: float,
-    b1: float,
-    db: float,
-) -> Dict[str, object]:
-    """등차수열 재구성 연산 실행"""
-    n, a_n = generate_arithmetic_sequence(a1, d, n_terms)
-    _, b_n = generate_arithmetic_sequence(b1, db, n_terms)
-
-    if op == "원래 등차수열 (a_n)":
-        values = a_n
-        new_a1, new_d = a1, d
-        expr = f"a_n = {a1:.4g} + (n-1)({d:.4g})"
-        why = "원래 수열이므로 등차수열입니다."
-    elif op == "스칼라배 (k·a_n)":
-        values = k * a_n
-        new_a1, new_d = k * a1, k * d
-        expr = f"a'_n = {k:.4g}[{a1:.4g} + (n-1)({d:.4g})] = {new_a1:.4g} + (n-1)({new_d:.4g})"
-        why = "모든 항에 같은 수를 곱하면 항 사이 차이도 같은 비율로 바뀌어 공차가 일정합니다."
-    elif op == "두 등차수열의 합 (a_n + b_n)":
-        values = a_n + b_n
-        new_a1, new_d = a1 + b1, d + db
-        expr = (
-            f"c_n = [{a1:.4g} + (n-1)({d:.4g})] + [{b1:.4g} + (n-1)({db:.4g})]"
-            f" = {new_a1:.4g} + (n-1)({new_d:.4g})"
-        )
-        why = "두 수열의 각 항을 더하면 첫째항과 공차가 각각 더해져 여전히 공차가 일정합니다."
-    else:
-        values = a_n - b_n
-        new_a1, new_d = a1 - b1, d - db
-        expr = (
-            f"c_n = [{a1:.4g} + (n-1)({d:.4g})] - [{b1:.4g} + (n-1)({db:.4g})]"
-            f" = {new_a1:.4g} + (n-1)({new_d:.4g})"
-        )
-        why = "두 수열의 각 항을 빼면 첫째항과 공차가 각각 차가 되어도 공차가 일정합니다."
-
-    return {
-        "n": n,
-        "values": values,
-        "new_a1": new_a1,
-        "new_d": new_d,
-        "expr": expr,
-        "why": why,
-        "table": pd.DataFrame({"n": n, "재구성 수열": values}),
-    }
+def compute_y_range(point_values: np.ndarray, curve_values: np.ndarray) -> Tuple[float, float]:
+    """그래프의 y축 범위를 적절히 잡는다."""
+    all_values = np.concatenate([point_values, curve_values])
+    finite_values = all_values[np.isfinite(all_values)]
+    if finite_values.size == 0:
+        return -1.0, 1.0
+    min_value = float(np.min(finite_values))
+    max_value = float(np.max(finite_values))
+    if math.isclose(min_value, max_value, abs_tol=1e-10):
+        padding = max(1.0, abs(min_value) * 0.2 + 1.0)
+        return min_value - padding, max_value + padding
+    padding = (max_value - min_value) * 0.15
+    return min_value - padding, max_value + padding
 
 
-def reconstruct_geometric(
-    op: str,
-    g1: float,
-    r: float,
-    n_terms: int,
-    k: float,
-    h1: float,
-    s: float,
-) -> Dict[str, object]:
-    """등비수열 재구성 연산 실행 (정의역 검증 포함)"""
-    n, g_n = generate_geometric_sequence(g1, r, n_terms)
-    _, h_n = generate_geometric_sequence(h1, s, n_terms)
+def build_animated_plot(
+    point_x: np.ndarray,
+    point_y: np.ndarray,
+    curve_x: np.ndarray,
+    curve_y: np.ndarray,
+    title: str,
+    point_label: str,
+    curve_label: str,
+) -> Any:
+    """Plotly 프레임을 사용해 왼쪽에서 오른쪽으로 그려지는 그래프를 만든다."""
+    if not PLOTLY_AVAILABLE:
+        return None
+    if len(point_x) == 0 or len(curve_x) == 0:
+        return build_message_figure(title, "그래프를 만들 데이터가 아직 없습니다.")
 
-    if op == "원래 등비수열 (g_n)":
-        values = g_n
-        new_g1, new_r = g1, r
-        expr = f"g_n = {g1:.4g}·({r:.4g})^(n-1)"
-        why = "원래 수열이므로 등비수열입니다."
-    elif op == "스칼라배 (k·g_n)":
-        values = k * g_n
-        new_g1, new_r = k * g1, r
-        expr = f"g'_n = {k:.4g}·{g1:.4g}·({r:.4g})^(n-1) = {new_g1:.4g}·({new_r:.4g})^(n-1)"
-        why = "모든 항에 같은 수를 곱해도 인접한 항의 비는 유지되어 공비가 일정합니다."
-    elif op == "두 등비수열의 곱 (g_n · h_n)":
-        values = g_n * h_n
-        new_g1, new_r = g1 * h1, r * s
-        expr = (
-            f"p_n = {g1:.4g}({r:.4g})^(n-1) · {h1:.4g}({s:.4g})^(n-1)"
-            f" = {new_g1:.4g}·({new_r:.4g})^(n-1)"
-        )
-        why = "곱하면 첫째항은 곱으로, 공비도 곱으로 결합되어 여전히 등비수열입니다."
-    else:
-        if h1 == 0:
-            raise ValueError("h₁이 0이면 첫 항에서 0으로 나눌 수 없습니다. h₁ ≠ 0으로 바꿔 주세요.")
-        if s == 0 and n_terms > 1:
-            raise ValueError("공비 s=0이면 h₂부터 0이 되어 나눗셈이 정의되지 않습니다. s를 0이 아닌 값으로 설정해 주세요.")
-        if np.any(np.isclose(h_n, 0.0)):
-            raise ValueError("h_n 중 0이 포함되어 나눗셈이 정의되지 않습니다. h₁, s 값을 조정해 주세요.")
-        values = g_n / h_n
-        new_g1, new_r = g1 / h1, r / s
-        expr = (
-            f"q_n = [{g1:.4g}({r:.4g})^(n-1)] / [{h1:.4g}({s:.4g})^(n-1)]"
-            f" = {new_g1:.4g}·({new_r:.4g})^(n-1)"
-        )
-        why = "나눗셈도 정의역 조건(h_n≠0)을 만족하면 첫째항과 공비가 비로 결합되어 등비수열입니다."
+    point_count = len(point_x)
+    curve_count = len(curve_x)
+    frame_count = max(14, min(30, curve_count))
+    y_min, y_max = compute_y_range(point_y, curve_y)
+    first_curve_index = max(2, curve_count // frame_count)
+    first_point_index = 1
 
-    return {
-        "n": n,
-        "values": values,
-        "new_g1": new_g1,
-        "new_r": new_r,
-        "expr": expr,
-        "why": why,
-        "table": pd.DataFrame({"n": n, "재구성 수열": values}),
-    }
+    fig = go.Figure(
+        data=[
+            go.Scatter(
+                x=curve_x[:first_curve_index],
+                y=curve_y[:first_curve_index],
+                mode="lines",
+                line=dict(color="#5B8DEF", width=4),
+                name=curve_label,
+            ),
+            go.Scatter(
+                x=point_x[:first_point_index],
+                y=point_y[:first_point_index],
+                mode="markers",
+                marker=dict(size=11, color="#143d67", line=dict(color="#ffffff", width=1.8)),
+                name=point_label,
+            ),
+        ]
+    )
 
-
-# -----------------------------
-# Plotly 그래프 함수
-# -----------------------------
-def build_animation_figure(
-    n_points: np.ndarray,
-    seq_values: np.ndarray,
-    x_cont: np.ndarray,
-    y_cont: np.ndarray,
-    seq_name: str,
-    func_name: str,
-    y_title: str,
-) -> go.Figure:
-    """점 + 연속함수를 순차적으로 그리는 Plotly 애니메이션"""
-    frames: List[go.Frame] = []
-    total = len(x_cont)
-
-    for i in range(2, total + 1):
-        x_partial = x_cont[:i]
-        y_partial = y_cont[:i]
-        visible_points = n_points[n_points <= x_partial[-1]]
-        point_values = seq_values[: len(visible_points)]
-
+    frames = []
+    for frame_index in range(1, frame_count + 1):
+        fraction = frame_index / frame_count
+        curve_end = max(2, min(curve_count, int(math.ceil(curve_count * fraction))))
+        point_end = max(1, min(point_count, int(math.ceil(point_count * fraction))))
         frames.append(
             go.Frame(
                 data=[
                     go.Scatter(
-                        x=x_partial,
-                        y=y_partial,
+                        x=curve_x[:curve_end],
+                        y=curve_y[:curve_end],
                         mode="lines",
-                        name=func_name,
-                        line=dict(color="#2d6cdf", width=3),
+                        line=dict(color="#5B8DEF", width=4),
+                        name=curve_label,
                     ),
                     go.Scatter(
-                        x=visible_points,
-                        y=point_values,
+                        x=point_x[:point_end],
+                        y=point_y[:point_end],
                         mode="markers",
-                        name=seq_name,
-                        marker=dict(color="#113b88", size=10, symbol="circle"),
+                        marker=dict(size=11, color="#143d67", line=dict(color="#ffffff", width=1.8)),
+                        name=point_label,
                     ),
                 ],
-                name=str(i),
+                name=f"frame_{frame_index}",
             )
         )
-
-    fig = go.Figure(
-        data=[
-            go.Scatter(x=[x_cont[0]], y=[y_cont[0]], mode="lines", name=func_name, line=dict(color="#2d6cdf", width=3)),
-            go.Scatter(x=[n_points[0]], y=[seq_values[0]], mode="markers", name=seq_name, marker=dict(color="#113b88", size=10)),
-        ],
-        frames=frames,
-    )
+    fig.frames = frames
 
     fig.update_layout(
-        template="plotly_white",
-        height=460,
-        margin=dict(l=30, r=20, t=20, b=30),
-        xaxis_title="항 번호 또는 x",
-        yaxis_title=y_title,
-        legend=dict(orientation="h", y=1.05, x=0),
+        title=dict(text=title, font=dict(size=20, color="#17324d")),
+        height=520,
+        margin=dict(l=30, r=30, t=80, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.78)",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            bgcolor="rgba(255,255,255,0.0)",
+        ),
+        xaxis=dict(
+            title="항 번호 / 연속 변수 x",
+            range=[0.8, float(max(point_x.max(), curve_x.max())) + 0.2],
+            gridcolor="rgba(130, 166, 211, 0.22)",
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="값",
+            range=[y_min, y_max],
+            gridcolor="rgba(130, 166, 211, 0.22)",
+            zeroline=False,
+        ),
         updatemenus=[
-            {
-                "type": "buttons",
-                "direction": "left",
-                "x": 0,
-                "y": 1.18,
-                "buttons": [
-                    {
-                        "label": "▶ 그래프 그리기",
-                        "method": "animate",
-                        "args": [
+            dict(
+                type="buttons",
+                direction="left",
+                x=0.0,
+                y=1.18,
+                showactive=False,
+                bgcolor="rgba(255,255,255,0.72)",
+                bordercolor="rgba(130, 166, 211, 0.2)",
+                buttons=[
+                    dict(
+                        label="재생",
+                        method="animate",
+                        args=[
                             None,
                             {
-                                "frame": {"duration": 45, "redraw": True},
-                                "transition": {"duration": 10},
+                                "frame": {"duration": 110, "redraw": True},
+                                "transition": {"duration": 0},
                                 "fromcurrent": True,
+                                "mode": "immediate",
                             },
                         ],
-                    },
-                    {
-                        "label": "↺ 애니메이션 다시 보기",
-                        "method": "animate",
-                        "args": [
-                            [f.name for f in frames],
+                    ),
+                    dict(
+                        label="일시정지",
+                        method="animate",
+                        args=[
+                            [None],
                             {
-                                "frame": {"duration": 45, "redraw": True},
-                                "transition": {"duration": 10},
-                                "fromcurrent": False,
+                                "frame": {"duration": 0, "redraw": False},
+                                "transition": {"duration": 0},
+                                "mode": "immediate",
                             },
                         ],
-                    },
+                    ),
+                    dict(
+                        label="처음으로",
+                        method="animate",
+                        args=[
+                            ["frame_1"],
+                            {
+                                "frame": {"duration": 0, "redraw": True},
+                                "transition": {"duration": 0},
+                                "mode": "immediate",
+                            },
+                        ],
+                    ),
                 ],
-            }
+            )
         ],
     )
     return fig
 
 
-def build_discrete_only_figure(n_points: np.ndarray, seq_values: np.ndarray, title: str) -> go.Figure:
-    """연속 확장이 어려운 경우(공비<=0) 점 중심 그래프 표시"""
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=n_points,
-            y=seq_values,
-            mode="markers+lines",
-            name=title,
-            marker=dict(size=10, color="#113b88"),
-            line=dict(color="#6c88c2", width=2),
-        )
+def render_plotly_animation(fig: Any, chart_id: str, nonce: int) -> None:
+    """Plotly HTML을 직접 렌더링해 자동 재생되는 애니메이션을 표시한다."""
+    if not PLOTLY_AVAILABLE or fig is None:
+        st.warning("현재 Python 환경에서 `plotly`를 찾지 못해 그래프를 표시할 수 없습니다. `pip install plotly` 후 다시 실행하면 그래프가 정상적으로 나타납니다.")
+        return
+    html = pio.to_html(
+        fig,
+        include_plotlyjs=True,
+        full_html=False,
+        auto_play=True,
+        div_id=f"{chart_id}_{nonce}",
     )
-    fig.update_layout(template="plotly_white", height=430, xaxis_title="항 번호 n", yaxis_title="값")
-    return fig
+    html += f"<!-- animation-{chart_id}-{nonce} -->"
+    components.html(html, height=int(fig.layout.height or 520) + 20, scrolling=False)
 
 
-# -----------------------------
-# 유틸 / 입력 예시 로딩
-# -----------------------------
-def init_state() -> None:
-    defaults = {
-        "arith": {"a1": 3.0, "d": 2.0, "n": 12, "b1": 1.0, "db": -1.0, "k": 2.0},
-        "geo": {"g1": 2.0, "r": 1.5, "n": 10, "h1": 1.0, "s": 0.5, "k": 3.0},
-    }
-    if "params" not in st.session_state:
-        st.session_state["params"] = defaults
-
-
-def load_arith_example(idx: int) -> None:
-    examples = [
-        {"a1": 3.0, "d": 2.0, "n": 12, "b1": 1.0, "db": -1.0, "k": 2.0},
-        {"a1": -4.0, "d": 3.0, "n": 10, "b1": 5.0, "db": 2.0, "k": -1.5},
-        {"a1": 10.0, "d": -1.0, "n": 15, "b1": -2.0, "db": 4.0, "k": 0.5},
-    ]
-    ex = examples[idx]
-    st.session_state["params"]["arith"] = ex
-    # 비교 탭 위젯 키까지 동기화하여 버튼 클릭 즉시 반영
-    st.session_state["cmp_a1"] = ex["a1"]
-    st.session_state["cmp_d"] = ex["d"]
-    st.session_state["cmp_n_a"] = ex["n"]
-
-
-def load_geo_example(idx: int) -> None:
-    examples = [
-        {"g1": 2.0, "r": 1.4, "n": 10, "h1": 1.0, "s": 0.7, "k": 3.0},
-        {"g1": 64.0, "r": 0.5, "n": 10, "h1": 2.0, "s": 0.5, "k": 0.25},
-        {"g1": -3.0, "r": 2.0, "n": 8, "h1": -1.0, "s": 2.0, "k": -2.0},
-    ]
-    ex = examples[idx]
-    st.session_state["params"]["geo"] = ex
-    st.session_state["cmp_g1"] = ex["g1"]
-    st.session_state["cmp_r"] = ex["r"]
-    st.session_state["cmp_n_g"] = ex["n"]
-
-
-def validate_common_n(n_terms: int) -> bool:
-    if n_terms < 3 or n_terms > 40:
-        st.warning("항의 개수 n은 3 이상 40 이하로 설정해 주세요. 그래프 관찰에 적절한 범위입니다.")
-        return False
-    return True
-
-
-def render_ratio_interpretation(r: float) -> None:
-    """공비에 따른 해석 안내"""
-    if np.isclose(r, 1.0):
-        st.info("공비 r=1이면 모든 항이 같은 상수수열이 됩니다.")
-    elif np.isclose(r, 0.0):
-        st.info("공비 r=0이면 첫째항 이후 모든 항이 0이 됩니다. 연속 지수함수 연결은 제한적입니다.")
-    elif r < 0:
-        st.warning("공비가 음수이면 항의 부호가 번갈아 나타납니다. 연속 지수함수와 직접 연결하기는 어렵습니다.")
-    elif 0 < r < 1:
-        st.info("0<r<1이면 지수적으로 감소하는 패턴입니다.")
+def reconstruct_arithmetic(
+    a1: float,
+    d: float,
+    count: int,
+    operation: str,
+    b1: float,
+    db: float,
+    k: float,
+) -> Dict[str, Any]:
+    """등차수열 재구성 결과를 수학적으로 계산한다."""
+    if operation == "원래 수열 a_n":
+        new_first = a1
+        new_diff = d
+        explanation = "공차가 일정하므로 원래 수열 자체가 등차수열입니다."
+    elif operation == "스칼라배 k·a_n":
+        new_first = k * a1
+        new_diff = k * d
+        explanation = "모든 항에 같은 수를 곱하면 인접한 항의 차도 같은 배수만큼 바뀌므로 공차가 일정하게 유지됩니다."
+    elif operation == "두 등차수열의 합 a_n + b_n":
+        new_first = a1 + b1
+        new_diff = d + db
+        explanation = "두 수열의 n번째 항을 더하면 첫째항은 더해지고 공차도 더해져 다시 등차수열이 됩니다."
     else:
-        st.info("r>1이면 지수적으로 증가하는 패턴입니다.")
+        new_first = a1 - b1
+        new_diff = d - db
+        explanation = "두 수열의 n번째 항을 빼면 첫째항은 차가 되고 공차도 차가 되어 다시 등차수열이 됩니다."
+
+    indices, values = arithmetic_sequence(new_first, new_diff, count)
+    result = {
+        "valid": True,
+        "new_first": new_first,
+        "new_diff": new_diff,
+        "indices": indices,
+        "values": values,
+        "sequence_expr": arithmetic_expr_text(new_first, new_diff),
+        "sequence_latex": arithmetic_expr_latex(new_first, new_diff),
+        "function_expr": arithmetic_expr_text(new_first, new_diff, variable="x"),
+        "function_latex": arithmetic_expr_latex(new_first, new_diff, variable="x"),
+        "explanation": explanation,
+    }
+    return result
 
 
-# -----------------------------
-# 탭 렌더링
-# -----------------------------
-def render_tab_concept() -> None:
-    render_explanation_card(
-        "선행조직자(Advance Organizer)",
-        "등차수열은 항 번호가 1씩 증가할 때 값이 일정하게 변하므로 자연수에서 정의된 일차적 규칙으로 볼 수 있습니다. "
-        "등비수열은 항 번호가 1씩 증가할 때 값이 일정한 비율로 변하므로 자연수에서 정의된 지수적 규칙으로 이해할 수 있습니다.",
-    )
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("### 등차수열 ↔ 일차함수")
-        st.latex(r"a_n = a_1 + (n-1)d")
-        st.latex(r"y = a_1 + (x-1)d")
-        st.info("수열은 자연수 n에서의 점, 함수는 실수 x에서의 연속 그래프입니다. 규칙 구조는 동일합니다.")
-    with c2:
-        st.markdown("### 등비수열 ↔ 지수함수")
-        st.latex(r"g_n = g_1r^{n-1}")
-        st.latex(r"y = g_1r^{x-1}")
-        st.info("점(수열)과 곡선(함수)의 표현은 다르지만, 성장/감소의 핵심 규칙은 연결됩니다.")
+def reconstruct_geometric(
+    g1: float,
+    r: float,
+    count: int,
+    operation: str,
+    h1: float,
+    s: float,
+    k: float,
+) -> Dict[str, Any]:
+    """등비수열 재구성 결과를 수학적으로 계산한다."""
+    if r <= 0:
+        return {
+            "valid": False,
+            "message": "이 앱에서는 등비수열을 지수함수와 연결하기 위해 공비를 양수로 둡니다. 0 이하의 공비는 연속 그래프로 자연스럽게 잇기 어려우므로 양수를 입력해 주세요.",
+        }
+    if operation in {"두 등비수열의 곱 g_n · h_n", "두 등비수열의 나눗셈 g_n / h_n"} and s <= 0:
+        return {
+            "valid": False,
+            "message": "보조 등비수열도 지수함수와 연결하려면 공비를 양수로 두는 것이 좋습니다. s를 양수로 다시 입력해 주세요.",
+        }
 
-    render_explanation_card(
-        "통합적 조정(Integrative Reconciliation)",
-        "수열은 떨어진 점, 함수는 연속 그래프라는 차이를 인식하되, 두 대상이 같은 형태의 규칙을 공유할 수 있음을 비교하며 확인해 봅시다.",
-    )
+    ratio_note = ""
+    if operation == "원래 수열 g_n":
+        new_first = g1
+        new_ratio = r
+        explanation = "공비가 일정하므로 원래 수열 자체가 등비수열입니다."
+    elif operation == "스칼라배 k·g_n":
+        new_first = k * g1
+        new_ratio = r
+        if math.isclose(k, 0.0, abs_tol=1e-10):
+            explanation = "모든 항이 0인 영수열이 됩니다. 0·r^(n-1)=0 꼴로 쓸 수 있어 같은 형태로 볼 수 있지만, 공비는 하나로만 정해지지 않는다는 점을 함께 생각해 볼 수 있습니다."
+            ratio_note = "영수열이라 공비가 하나로 유일하게 정해지지는 않습니다."
+        else:
+            explanation = "모든 항에 같은 상수를 곱해도 인접한 두 항의 비는 그대로 유지되므로 다시 등비수열입니다."
+    elif operation == "두 등비수열의 곱 g_n · h_n":
+        new_first = g1 * h1
+        new_ratio = r * s
+        explanation = "각 항을 곱하면 첫째항은 g1·h1, 공비는 r·s가 되어 다시 등비수열이 됩니다."
+    else:
+        h_indices, h_values = geometric_sequence(h1, s, count)
+        if not validate_finite_values(h_values):
+            return {
+                "valid": False,
+                "message": "보조 등비수열의 값이 너무 커져서 나눗셈을 안정적으로 표시하기 어렵습니다. 항의 개수나 공비를 조금 줄여 보세요.",
+            }
+        if np.any(np.isclose(h_values, 0.0, atol=1e-12)):
+            return {
+                "valid": False,
+                "message": "나눗셈 재구성에서는 분모 수열 h_n이 0이 되면 항을 만들 수 없습니다. h1과 s를 다시 확인해 주세요.",
+            }
+        new_first = g1 / h1
+        new_ratio = r / s
+        explanation = "각 항을 나누면 첫째항은 g1/h1, 공비는 r/s가 되어 다시 등비수열이 됩니다. 단, 모든 h_n이 0이 아니어야 합니다."
 
-
-def render_tab_compare() -> None:
-    st.markdown("### 점진적 분화 1단계: 수열의 점과 대응 함수 비교")
-
-    left, right = st.columns(2)
-    with left:
-        st.markdown("<div class='section-title'>등차수열 설정</div>", unsafe_allow_html=True)
-        b1, b2, b3 = st.columns(3)
-        with b1:
-            if st.button("등차 예시 1", use_container_width=True):
-                load_arith_example(0)
-        with b2:
-            if st.button("등차 예시 2", use_container_width=True):
-                load_arith_example(1)
-        with b3:
-            if st.button("등차 예시 3", use_container_width=True):
-                load_arith_example(2)
-
-        params_a = st.session_state["params"]["arith"]
-        a1 = st.number_input("a₁", value=float(params_a["a1"]), key="cmp_a1")
-        d = st.number_input("d", value=float(params_a["d"]), key="cmp_d")
-        n_a = st.slider("항의 개수 n", 3, 40, int(params_a["n"]), key="cmp_n_a")
-
-        if validate_common_n(n_a):
-            n, vals = generate_arithmetic_sequence(a1, d, n_a)
-            x_cont = np.linspace(1, n_a, 220)
-            y_cont = a1 + (x_cont - 1) * d
-            st.latex(rf"a_n = {a1:.4g} + (n-1)({d:.4g})")
-            st.latex(rf"y = {a1:.4g} + (x-1)({d:.4g})")
-            fig = build_animation_figure(n, vals, x_cont, y_cont, "등차수열 점", "일차함수", "값")
-            st.plotly_chart(fig, use_container_width=True)
-
-    with right:
-        st.markdown("<div class='section-title'>등비수열 설정</div>", unsafe_allow_html=True)
-        b1, b2, b3 = st.columns(3)
-        with b1:
-            if st.button("등비 예시 1", use_container_width=True):
-                load_geo_example(0)
-        with b2:
-            if st.button("등비 예시 2", use_container_width=True):
-                load_geo_example(1)
-        with b3:
-            if st.button("등비 예시 3", use_container_width=True):
-                load_geo_example(2)
-
-        params_g = st.session_state["params"]["geo"]
-        g1 = st.number_input("g₁", value=float(params_g["g1"]), key="cmp_g1")
-        r = st.number_input("r (기본 모드: 양수 권장)", value=float(params_g["r"]), key="cmp_r")
-        n_g = st.slider("항의 개수 n", 3, 40, int(params_g["n"]), key="cmp_n_g")
-
-        if validate_common_n(n_g):
-            render_ratio_interpretation(r)
-            n, vals = generate_geometric_sequence(g1, r, n_g)
-            st.latex(rf"g_n = {g1:.4g}({r:.4g})^{{n-1}}")
-            if r > 0:
-                x_cont = np.linspace(1, n_g, 260)
-                y_cont = g1 * np.power(r, x_cont - 1)
-                st.latex(rf"y = {g1:.4g}({r:.4g})^{{x-1}}")
-                fig = build_animation_figure(n, vals, x_cont, y_cont, "등비수열 점", "지수함수", "값")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("연속 지수함수와 직접 연결하려면 공비 r은 양수로 제한하는 것이 적절합니다.")
-                fig = build_discrete_only_figure(n, vals, "등비수열 점")
-                st.plotly_chart(fig, use_container_width=True)
+    indices, values = geometric_sequence(new_first, new_ratio, count)
+    result = {
+        "valid": True,
+        "new_first": new_first,
+        "new_ratio": new_ratio,
+        "indices": indices,
+        "values": values,
+        "sequence_expr": geometric_expr_text(new_first, new_ratio),
+        "sequence_latex": geometric_expr_latex(new_first, new_ratio),
+        "function_expr": geometric_expr_text(new_first, new_ratio, variable="x"),
+        "function_latex": geometric_expr_latex(new_first, new_ratio, variable="x"),
+        "explanation": explanation,
+        "ratio_note": ratio_note,
+    }
+    return result
 
 
-def render_tab_reconstruct() -> None:
-    st.markdown("### 점진적 분화 2단계: 재구성 실험 (학생 조작 중심)")
-    col_a, col_g = st.columns(2)
+def load_arithmetic_compare_example(example_no: int) -> None:
+    """등차수열 비교 탐구 예시를 불러온다."""
+    if example_no == 1:
+        st.session_state["cmp_arith_a1"] = 2.0
+        st.session_state["cmp_arith_d"] = 3.0
+        st.session_state["cmp_arith_n"] = 8
+    else:
+        st.session_state["cmp_arith_a1"] = 10.0
+        st.session_state["cmp_arith_d"] = -2.0
+        st.session_state["cmp_arith_n"] = 9
+    st.session_state["cmp_arith_drawn"] = False
+    st.session_state["cmp_arith_nonce"] += 1
 
-    with col_a:
-        st.markdown("#### A. 등차수열 재구성")
-        a1 = st.number_input("기본 a₁", value=3.0, key="rec_a1")
-        d = st.number_input("기본 d", value=2.0, key="rec_d")
-        n_terms = st.slider("기본 n", 3, 40, 12, key="rec_na")
-        b1 = st.number_input("두 번째 b₁", value=1.0, key="rec_b1")
-        db = st.number_input("두 번째 d_b", value=-1.0, key="rec_db")
-        k = st.number_input("스칼라 k", value=2.0, key="rec_ka")
-        op = st.selectbox(
-            "재구성 선택",
-            ["원래 등차수열 (a_n)", "스칼라배 (k·a_n)", "두 등차수열의 합 (a_n + b_n)", "두 등차수열의 차 (a_n - b_n)"],
-            key="op_a",
+
+def load_geometric_compare_example(example_no: int) -> None:
+    """등비수열 비교 탐구 예시를 불러온다."""
+    if example_no == 1:
+        st.session_state["cmp_geo_g1"] = 3.0
+        st.session_state["cmp_geo_r"] = 2.0
+        st.session_state["cmp_geo_n"] = 7
+    else:
+        st.session_state["cmp_geo_g1"] = 81.0
+        st.session_state["cmp_geo_r"] = 0.5
+        st.session_state["cmp_geo_n"] = 8
+    st.session_state["cmp_geo_drawn"] = False
+    st.session_state["cmp_geo_nonce"] += 1
+
+
+def load_arithmetic_reconstruction_example(example_no: int) -> None:
+    """등차수열 재구성 예시를 불러온다."""
+    if example_no == 1:
+        st.session_state["rec_arith_a1"] = 1.0
+        st.session_state["rec_arith_d"] = 2.0
+        st.session_state["rec_arith_b1"] = 4.0
+        st.session_state["rec_arith_db"] = -1.0
+        st.session_state["rec_arith_k"] = 3.0
+        st.session_state["rec_arith_n"] = 8
+        st.session_state["rec_arith_operation"] = "두 등차수열의 합 a_n + b_n"
+    else:
+        st.session_state["rec_arith_a1"] = 7.0
+        st.session_state["rec_arith_d"] = 0.0
+        st.session_state["rec_arith_b1"] = 2.0
+        st.session_state["rec_arith_db"] = 3.0
+        st.session_state["rec_arith_k"] = -2.0
+        st.session_state["rec_arith_n"] = 7
+        st.session_state["rec_arith_operation"] = "스칼라배 k·a_n"
+    st.session_state["rec_arith_drawn"] = False
+    st.session_state["rec_arith_nonce"] += 1
+
+
+def load_geometric_reconstruction_example(example_no: int) -> None:
+    """등비수열 재구성 예시를 불러온다."""
+    if example_no == 1:
+        st.session_state["rec_geo_g1"] = 2.0
+        st.session_state["rec_geo_r"] = 2.0
+        st.session_state["rec_geo_h1"] = 3.0
+        st.session_state["rec_geo_s"] = 1.5
+        st.session_state["rec_geo_k"] = 2.0
+        st.session_state["rec_geo_n"] = 7
+        st.session_state["rec_geo_operation"] = "두 등비수열의 곱 g_n · h_n"
+    else:
+        st.session_state["rec_geo_g1"] = 64.0
+        st.session_state["rec_geo_r"] = 0.5
+        st.session_state["rec_geo_h1"] = 4.0
+        st.session_state["rec_geo_s"] = 2.0
+        st.session_state["rec_geo_k"] = 0.0
+        st.session_state["rec_geo_n"] = 7
+        st.session_state["rec_geo_operation"] = "스칼라배 k·g_n"
+    st.session_state["rec_geo_drawn"] = False
+    st.session_state["rec_geo_nonce"] += 1
+
+
+def render_concept_tab() -> None:
+    """개념 연결 탭을 그린다."""
+    col1, col2 = st.columns([1.15, 1.0], gap="large")
+    with col1:
+        render_summary_card(
+            "선행조직자",
+            [
+                "등차수열은 항 번호가 1씩 증가할 때 값이 일정하게 변하므로 자연수에서 정의된 일차적 규칙으로 볼 수 있습니다.",
+                "등비수열은 항 번호가 1씩 증가할 때 값이 일정한 비율로 변하므로 지수적 규칙으로 이해할 수 있습니다.",
+                "수열은 점으로, 함수는 연속 그래프로 나타나지만 규칙의 구조는 서로 연결될 수 있습니다.",
+            ],
         )
-
-        if st.button("등차 재구성 실행", use_container_width=True):
-            result = reconstruct_arithmetic(op, a1, d, n_terms, k, b1, db)
-            n = result["n"]
-            vals = result["values"]
-            new_a1, new_d = result["new_a1"], result["new_d"]
-            st.success("재구성 완료! 결과가 다시 등차수열인지 확인해 보세요.")
-            st.latex(rf"{result['expr']}")
-            st.dataframe(result["table"].head(10), use_container_width=True)
-            x_cont = np.linspace(1, n_terms, 240)
-            y_cont = new_a1 + (x_cont - 1) * new_d
-            fig = build_animation_figure(n, vals, x_cont, y_cont, "재구성 점", "대응 일차함수", "값")
-            st.plotly_chart(fig, use_container_width=True)
-            render_result_box([
-                "현재 선택한 재구성 결과는 <b>등차수열</b>입니다.",
-                "대응 함수는 <b>일차함수</b>입니다.",
-                result["why"],
-            ])
-
-    with col_g:
-        st.markdown("#### B. 등비수열 재구성")
-        g1 = st.number_input("기본 g₁", value=2.0, key="rec_g1")
-        r = st.number_input("기본 r (양수 권장)", value=1.5, key="rec_r")
-        n_terms = st.slider("기본 n", 3, 40, 10, key="rec_ng")
-        h1 = st.number_input("두 번째 h₁", value=1.0, key="rec_h1")
-        s = st.number_input("두 번째 s", value=0.5, key="rec_s")
-        k = st.number_input("스칼라 k", value=3.0, key="rec_kg")
-        op = st.selectbox(
-            "재구성 선택",
-            ["원래 등비수열 (g_n)", "스칼라배 (k·g_n)", "두 등비수열의 곱 (g_n · h_n)", "두 등비수열의 나눗셈 (g_n / h_n)"],
-            key="op_g",
+        render_summary_card(
+            "오늘의 학습 흐름",
+            [
+                "먼저 수열의 점과 함수 그래프를 비교하여 규칙의 닮은 점을 확인합니다.",
+                "그다음 덧셈, 뺄셈, 곱셈, 나눗셈, 스칼라배로 수열을 재구성해 봅니다.",
+                "마지막에는 재구성한 결과도 같은 유형의 규칙인지 스스로 설명해 봅니다.",
+            ],
         )
-
-        if st.button("등비 재구성 실행", use_container_width=True):
-            try:
-                result = reconstruct_geometric(op, g1, r, n_terms, k, h1, s)
-                n = result["n"]
-                vals = result["values"]
-                new_g1, new_r = result["new_g1"], result["new_r"]
-                st.success("재구성 완료! 비의 구조가 유지되는지 관찰해 보세요.")
-                st.latex(rf"{result['expr']}")
-                st.dataframe(result["table"].head(10), use_container_width=True)
-                render_ratio_interpretation(new_r)
-
-                if new_r > 0:
-                    x_cont = np.linspace(1, n_terms, 280)
-                    y_cont = new_g1 * np.power(new_r, x_cont - 1)
-                    fig = build_animation_figure(n, vals, x_cont, y_cont, "재구성 점", "대응 지수함수", "값")
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning("새 공비가 0 이하이면 연속 지수함수로 직접 확장하기 어렵습니다. 점(수열) 관찰 중심으로 해석하세요.")
-                    fig = build_discrete_only_figure(n, vals, "재구성 점")
-                    st.plotly_chart(fig, use_container_width=True)
-
-                render_result_box([
-                    "현재 선택한 재구성 결과는 <b>등비수열</b>입니다.",
-                    "대응 함수는 <b>지수함수</b>입니다(공비 양수 조건).",
-                    result["why"],
-                ])
-            except ValueError as e:
-                st.error(f"입력값을 다시 확인해 주세요: {e}")
-                st.info("수학적 정의역 조건을 점검하는 과정도 중요한 학습입니다. h_n이 0이 되지 않는지 확인해 봅시다.")
-
-
-def render_tab_summary() -> None:
-    render_explanation_card(
-        "학습 정리: 무엇을 알게 되었는가?",
-        "수열은 점, 함수는 연속 그래프라는 표현의 차이가 있지만 규칙의 형태를 공유할 수 있습니다. "
-        "등차수열은 일차적 변화, 등비수열은 지수적 변화를 나타냅니다. 재구성을 해도 같은 구조가 유지되는지 식과 그래프로 확인해 보세요.",
-    )
-
-    st.markdown("#### 학생 정리 문장")
-    st.text_area(
-        "아래 문장을 완성해 보세요.",
-        value=(
-            "나는 오늘 ________ 수열을 ________ 방식으로 재구성했을 때,\n"
-            "새 수열의 일반항이 ________ 꼴이 되어 다시 ________ 함수와 연결된다는 것을 확인했다."
-        ),
-        height=130,
-    )
-
-    st.markdown("#### 수업 마무리 질문")
-    st.markdown(
-        """
-        1. 수열의 점과 함수의 연속 그래프는 무엇이 다르고, 무엇이 같은가?
-        2. 등차수열의 합/차가 왜 다시 등차수열인지 일반항으로 설명할 수 있는가?
-        3. 등비수열의 곱/나눗셈이 언제 가능한지 정의역 조건까지 말할 수 있는가?
-        4. 공비가 1, 0, 음수일 때 그래프 해석은 어떻게 달라지는가?
-        5. 재구성 결과를 그래프로 확인하는 과정이 식 이해에 어떤 도움을 주었는가?
-        """
-    )
+    with col2:
+        render_summary_card(
+            "통합적 조정",
+            [
+                "수열은 이산적 점이라서 항 번호가 자연수일 때만 나타납니다.",
+                "함수는 연속 그래프라서 중간의 x값까지 함께 해석할 수 있습니다.",
+                "표현 방식은 다르지만 규칙의 변화 구조는 서로 이어서 생각할 수 있습니다.",
+            ],
+        )
+        render_summary_card(
+            "능동적 의미 형성",
+            [
+                "값을 직접 입력하고 그래프를 그려 보세요.",
+                "재구성 전후의 식과 그래프를 비교하며 규칙이 어떻게 바뀌는지 확인해 보세요.",
+                "교사용 발문을 바탕으로 친구와 설명을 나눠 보세요.",
+            ],
+        )
 
     st.markdown(
         """
-        <div class="teacher-box">
-            <b>교사용 활용 포인트: 수업에서 이렇게 질문해 보세요</b>
-            <ul>
-                <li>"점으로 본 규칙과 곡선으로 본 규칙이 정확히 어디서 만나는가?"</li>
-                <li>"재구성 전후에 바뀌는 것은 무엇이고, 보존되는 구조는 무엇인가?"</li>
-                <li>"정의역 조건을 어기면 어떤 수학적 문제가 생기는가?"</li>
-            </ul>
+        <div class="glass-card">
+            <div class="section-title">수업 관찰 포인트</div>
+            <div class="section-body">
+                등차수열의 점들이 일차함수 위에 놓이는지, 등비수열의 점들이 지수함수적 패턴을 따르는지 관찰해 보세요.
+                특히 수열은 점으로만 찍히고 함수는 연속 곡선으로 이어진다는 차이를 의식하면, 같은 규칙 구조를 다른 표현으로 읽는 경험을 만들 수 있습니다.
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-# -----------------------------
-# 메인 앱
-# -----------------------------
+def render_arithmetic_compare_section() -> None:
+    """등차수열과 일차함수 비교 탐구를 렌더링한다."""
+    st.markdown(
+        """
+        <div class="glass-card">
+            <div class="section-title">등차수열과 일차함수 비교</div>
+            <div class="section-body">
+                등차수열은 항 번호가 1씩 증가할 때 값이 일정하게 변합니다.
+                그래서 자연수에서 정의된 일차적 규칙으로 이해할 수 있고, 그 점들은 대응하는 일차함수 위에 놓이게 됩니다.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    example_cols = st.columns(3)
+    with example_cols[0]:
+        st.markdown("**예시 불러오기**")
+    with example_cols[1]:
+        if st.button("예시 1: 증가", key="cmp_arith_ex1"):
+            load_arithmetic_compare_example(1)
+    with example_cols[2]:
+        if st.button("예시 2: 감소", key="cmp_arith_ex2"):
+            load_arithmetic_compare_example(2)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        a1 = float(st.number_input("첫째항 a1", key="cmp_arith_a1", step=1.0))
+    with col2:
+        d = float(st.number_input("공차 d", key="cmp_arith_d", step=1.0))
+    with col3:
+        count = int(st.number_input("항의 개수 n", min_value=2, max_value=30, key="cmp_arith_n", step=1))
+
+    st.latex(r"a_n = a_1 + (n-1)d")
+    st.latex(r"y = a_1 + (x-1)d")
+    st.latex(rf"a_n = {arithmetic_expr_latex(a1, d)}")
+    st.latex(rf"y = {arithmetic_expr_latex(a1, d, variable='x')}")
+
+    indices, values = arithmetic_sequence(a1, d, count)
+    curve_x = np.linspace(1, max(count, 2), 220)
+    curve_y = a1 + (curve_x - 1) * d
+
+    button_cols = st.columns([1, 1, 3])
+    with button_cols[0]:
+        if st.button("그래프 그리기", key="cmp_arith_draw"):
+            st.session_state["cmp_arith_drawn"] = True
+    with button_cols[1]:
+        if st.button("애니메이션 다시 보기", key="cmp_arith_replay"):
+            st.session_state["cmp_arith_drawn"] = True
+            st.session_state["cmp_arith_nonce"] += 1
+
+    if not validate_finite_values(values) or not validate_finite_values(curve_y):
+        st.warning("값의 크기가 너무 커서 그래프를 안정적으로 나타내기 어렵습니다. 공차나 항의 개수를 조금 줄여 보세요.")
+        fig = build_message_figure("등차수열 비교 그래프", "입력값을 조금 조정하면 그래프를 더 선명하게 비교할 수 있습니다.")
+        render_plotly_animation(fig, "cmp_arith_message", st.session_state["cmp_arith_nonce"])
+    elif st.session_state["cmp_arith_drawn"]:
+        fig = build_animated_plot(
+            indices,
+            values,
+            curve_x,
+            curve_y,
+            "등차수열의 점과 일차함수의 그래프",
+            "수열의 점",
+            "대응하는 일차함수",
+        )
+        render_plotly_animation(fig, "cmp_arith_chart", st.session_state["cmp_arith_nonce"])
+        st.caption("그래프가 열리면 애니메이션이 자동 재생됩니다. 다시 보고 싶으면 위의 버튼을 눌러 보세요.")
+    else:
+        st.info("`그래프 그리기`를 누르면 수열의 점과 대응하는 일차함수가 함께 나타납니다.")
+
+    preview_count = min(8, count)
+    st.dataframe(
+        make_term_dataframe(indices[:preview_count], values[:preview_count], "a_n"),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    interpretation = (
+        "공차가 0이므로 값이 일정한 상수 수열이며, 그래프는 수평선 위의 점들로 보입니다."
+        if math.isclose(d, 0.0, abs_tol=1e-10)
+        else "항 번호가 1 늘 때마다 값이 일정하게 변하므로 점들이 하나의 직선 위에 놓입니다."
+    )
+    render_summary_card(
+        "결과 요약",
+        [
+            f"일반항: a_n = {arithmetic_expr_text(a1, d)}",
+            f"처음 몇 개 항: {', '.join(format_number(v) for v in values[:preview_count])}",
+            interpretation,
+            "수열은 점으로 찍히지만, 그 점들은 대응하는 일차함수 위에 놓입니다.",
+        ],
+    )
+
+
+def render_geometric_compare_section() -> None:
+    """등비수열과 지수함수 비교 탐구를 렌더링한다."""
+    st.markdown(
+        """
+        <div class="glass-card">
+            <div class="section-title">등비수열과 지수함수 비교</div>
+            <div class="section-body">
+                등비수열은 항 번호가 1씩 증가할 때 값이 일정한 비율로 변합니다.
+                그래서 자연수에서 정의된 지수적 규칙으로 볼 수 있고, 그 점들은 대응하는 지수함수적 패턴 위에 놓입니다.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    example_cols = st.columns(3)
+    with example_cols[0]:
+        st.markdown("**예시 불러오기**")
+    with example_cols[1]:
+        if st.button("예시 1: 성장", key="cmp_geo_ex1"):
+            load_geometric_compare_example(1)
+    with example_cols[2]:
+        if st.button("예시 2: 감소", key="cmp_geo_ex2"):
+            load_geometric_compare_example(2)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        g1 = float(st.number_input("첫째항 g1", key="cmp_geo_g1", step=1.0))
+    with col2:
+        r = float(st.number_input("공비 r", key="cmp_geo_r", step=0.1))
+    with col3:
+        count = int(st.number_input("항의 개수 n", min_value=2, max_value=20, key="cmp_geo_n", step=1))
+
+    st.latex(r"g_n = g_1 \cdot r^{n-1}")
+    st.latex(r"y = g_1 \cdot r^{x-1}")
+
+    button_cols = st.columns([1, 1, 3])
+    with button_cols[0]:
+        if st.button("그래프 그리기", key="cmp_geo_draw"):
+            st.session_state["cmp_geo_drawn"] = True
+    with button_cols[1]:
+        if st.button("애니메이션 다시 보기", key="cmp_geo_replay"):
+            st.session_state["cmp_geo_drawn"] = True
+            st.session_state["cmp_geo_nonce"] += 1
+
+    if r <= 0:
+        st.warning("이 앱에서는 등비수열을 지수함수와 자연스럽게 연결하기 위해 공비를 양수로 둡니다. 0 이하의 공비는 연속 그래프로 같은 방식으로 이어 보기 어렵습니다.")
+        fig = build_message_figure("등비수열 비교 그래프", "공비 r를 양수로 입력하면 지수함수와의 연결을 확인할 수 있습니다.")
+        render_plotly_animation(fig, "cmp_geo_invalid", st.session_state["cmp_geo_nonce"])
+        return
+
+    indices, values = geometric_sequence(g1, r, count)
+    curve_x = np.linspace(1, max(count, 2), 240)
+    with np.errstate(over="ignore", invalid="ignore"):
+        curve_y = g1 * np.power(r, curve_x - 1)
+
+    st.latex(rf"g_n = {geometric_expr_latex(g1, r)}")
+    st.latex(rf"y = {geometric_expr_latex(g1, r, variable='x')}")
+
+    if not validate_finite_values(values) or not validate_finite_values(curve_y):
+        st.error("값의 크기가 너무 커서 그래프를 안정적으로 표시하기 어렵습니다. 공비나 항의 개수를 조금 줄여 보세요.")
+        fig = build_message_figure("등비수열 비교 그래프", "입력값을 조정하면 지수적 패턴을 더 분명하게 확인할 수 있습니다.")
+        render_plotly_animation(fig, "cmp_geo_message", st.session_state["cmp_geo_nonce"])
+    elif st.session_state["cmp_geo_drawn"]:
+        fig = build_animated_plot(
+            indices,
+            values,
+            curve_x,
+            curve_y,
+            "등비수열의 점과 지수함수의 그래프",
+            "수열의 점",
+            "대응하는 지수함수",
+        )
+        render_plotly_animation(fig, "cmp_geo_chart", st.session_state["cmp_geo_nonce"])
+        st.caption("그래프는 자동으로 재생됩니다. 공비가 1이면 상수 함수와 같은 모습이 나타납니다.")
+    else:
+        st.info("`그래프 그리기`를 누르면 수열의 점과 대응하는 지수함수적 패턴이 함께 나타납니다.")
+
+    preview_count = min(8, count)
+    st.dataframe(
+        make_term_dataframe(indices[:preview_count], values[:preview_count], "g_n"),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    interpretation = (
+        "공비가 1이므로 모든 항이 같아지고, 지수함수 그래프도 수평선처럼 보입니다."
+        if math.isclose(r, 1.0, abs_tol=1e-10)
+        else "항 번호가 1 늘 때마다 값이 일정한 비율로 변하므로 점들이 지수함수적 패턴 위에 놓입니다."
+    )
+    render_summary_card(
+        "결과 요약",
+        [
+            f"일반항: g_n = {geometric_expr_text(g1, r)}",
+            f"처음 몇 개 항: {', '.join(format_number(v) for v in values[:preview_count])}",
+            interpretation,
+            "수열은 점으로만 나타나지만, 규칙의 구조는 연속적인 지수함수와 연결해 볼 수 있습니다.",
+        ],
+    )
+
+
+def render_arithmetic_reconstruction_section() -> None:
+    """등차수열 재구성 실험을 렌더링한다."""
+    st.markdown(
+        """
+        <div class="glass-card">
+            <div class="section-title">등차수열 재구성 실험</div>
+            <div class="section-body">
+                덧셈, 뺄셈, 스칼라배로 수열을 바꾸어도 다시 등차수열이 되는지 확인해 봅시다.
+                식과 그래프를 함께 보면 왜 같은 유형의 규칙이 유지되는지 더 분명하게 볼 수 있습니다.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    example_cols = st.columns(3)
+    with example_cols[0]:
+        st.markdown("**예시 불러오기**")
+    with example_cols[1]:
+        if st.button("예시 1: 합", key="rec_arith_ex1"):
+            load_arithmetic_reconstruction_example(1)
+    with example_cols[2]:
+        if st.button("예시 2: 상수수열", key="rec_arith_ex2"):
+            load_arithmetic_reconstruction_example(2)
+
+    row1 = st.columns(4)
+    with row1[0]:
+        a1 = float(st.number_input("첫째항 a1", key="rec_arith_a1", step=1.0))
+    with row1[1]:
+        d = float(st.number_input("공차 d", key="rec_arith_d", step=1.0))
+    with row1[2]:
+        count = int(st.number_input("항의 개수 n", min_value=2, max_value=25, key="rec_arith_n", step=1))
+    with row1[3]:
+        k = float(st.number_input("스칼라 k", key="rec_arith_k", step=1.0))
+
+    row2 = st.columns(3)
+    with row2[0]:
+        operation = st.selectbox(
+            "재구성 방식",
+            [
+                "원래 수열 a_n",
+                "스칼라배 k·a_n",
+                "두 등차수열의 합 a_n + b_n",
+                "두 등차수열의 차 a_n - b_n",
+            ],
+            key="rec_arith_operation",
+        )
+    with row2[1]:
+        b1 = float(st.number_input("둘째 수열의 첫째항 b1", key="rec_arith_b1", step=1.0))
+    with row2[2]:
+        db = float(st.number_input("둘째 수열의 공차 db", key="rec_arith_db", step=1.0))
+
+    result = reconstruct_arithmetic(a1, d, count, operation, b1, db, k)
+    preview_count = min(8, count)
+
+    st.latex(r"a_n = a_1 + (n-1)d")
+    st.latex(r"b_n = b_1 + (n-1)d_b")
+    st.latex(rf"u_n = {result['sequence_latex']}")
+    st.latex(rf"y = {result['function_latex']}")
+
+    button_cols = st.columns([1, 1, 3])
+    with button_cols[0]:
+        if st.button("그래프 그리기", key="rec_arith_draw"):
+            st.session_state["rec_arith_drawn"] = True
+    with button_cols[1]:
+        if st.button("애니메이션 다시 보기", key="rec_arith_replay"):
+            st.session_state["rec_arith_drawn"] = True
+            st.session_state["rec_arith_nonce"] += 1
+
+    if not validate_finite_values(result["values"]):
+        st.warning("재구성한 값의 크기가 너무 커서 그래프를 안정적으로 표현하기 어렵습니다. 입력값을 조금 줄여 보세요.")
+        fig = build_message_figure("등차수열 재구성 그래프", "입력값을 조정하면 재구성 결과를 더 선명하게 볼 수 있습니다.")
+        render_plotly_animation(fig, "rec_arith_invalid", st.session_state["rec_arith_nonce"])
+    elif st.session_state["rec_arith_drawn"]:
+        curve_x = np.linspace(1, max(count, 2), 220)
+        curve_y = result["new_first"] + (curve_x - 1) * result["new_diff"]
+        fig = build_animated_plot(
+            result["indices"],
+            result["values"],
+            curve_x,
+            curve_y,
+            "재구성한 등차수열과 대응하는 일차함수",
+            "재구성한 수열의 점",
+            "대응하는 일차함수",
+        )
+        render_plotly_animation(fig, "rec_arith_chart", st.session_state["rec_arith_nonce"])
+    else:
+        st.info("재구성 방식을 고른 뒤 `그래프 그리기`를 눌러 식과 그래프를 함께 확인해 보세요.")
+
+    st.dataframe(
+        make_term_dataframe(result["indices"][:preview_count], result["values"][:preview_count], "u_n"),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    render_summary_card(
+        "재구성 결과",
+        [
+            f"새 수열의 일반항: u_n = {result['sequence_expr']}",
+            f"처음 몇 개 항: {', '.join(format_number(v) for v in result['values'][:preview_count])}",
+            f"첫째항과 공차: ({format_number(result['new_first'])}, {format_number(result['new_diff'])})",
+            result["explanation"],
+            "재구성한 점들도 다시 하나의 직선 위에 놓이는지 그래프에서 확인해 보세요.",
+        ],
+    )
+
+
+def render_geometric_reconstruction_section() -> None:
+    """등비수열 재구성 실험을 렌더링한다."""
+    st.markdown(
+        """
+        <div class="glass-card">
+            <div class="section-title">등비수열 재구성 실험</div>
+            <div class="section-body">
+                곱셈, 나눗셈, 스칼라배로 수열을 바꾼 뒤에도 다시 등비수열이 되는지 확인해 봅시다.
+                연속적인 지수함수와 연결하기 위해 이 앱에서는 공비를 양수로 두고 탐구합니다.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    example_cols = st.columns(3)
+    with example_cols[0]:
+        st.markdown("**예시 불러오기**")
+    with example_cols[1]:
+        if st.button("예시 1: 곱셈", key="rec_geo_ex1"):
+            load_geometric_reconstruction_example(1)
+    with example_cols[2]:
+        if st.button("예시 2: 영수열", key="rec_geo_ex2"):
+            load_geometric_reconstruction_example(2)
+
+    row1 = st.columns(4)
+    with row1[0]:
+        g1 = float(st.number_input("첫째항 g1", key="rec_geo_g1", step=1.0))
+    with row1[1]:
+        r = float(st.number_input("공비 r", key="rec_geo_r", step=0.1))
+    with row1[2]:
+        count = int(st.number_input("항의 개수 n", min_value=2, max_value=16, key="rec_geo_n", step=1))
+    with row1[3]:
+        k = float(st.number_input("스칼라 k", key="rec_geo_k", step=0.5))
+
+    row2 = st.columns(3)
+    with row2[0]:
+        operation = st.selectbox(
+            "재구성 방식",
+            [
+                "원래 수열 g_n",
+                "스칼라배 k·g_n",
+                "두 등비수열의 곱 g_n · h_n",
+                "두 등비수열의 나눗셈 g_n / h_n",
+            ],
+            key="rec_geo_operation",
+        )
+    with row2[1]:
+        h1 = float(st.number_input("둘째 수열의 첫째항 h1", key="rec_geo_h1", step=1.0))
+    with row2[2]:
+        s = float(st.number_input("둘째 수열의 공비 s", key="rec_geo_s", step=0.1))
+
+    st.latex(r"g_n = g_1 \cdot r^{n-1}")
+    st.latex(r"h_n = h_1 \cdot s^{n-1}")
+
+    button_cols = st.columns([1, 1, 3])
+    with button_cols[0]:
+        if st.button("그래프 그리기", key="rec_geo_draw"):
+            st.session_state["rec_geo_drawn"] = True
+    with button_cols[1]:
+        if st.button("애니메이션 다시 보기", key="rec_geo_replay"):
+            st.session_state["rec_geo_drawn"] = True
+            st.session_state["rec_geo_nonce"] += 1
+
+    result = reconstruct_geometric(g1, r, count, operation, h1, s, k)
+    if not result["valid"]:
+        st.error(result["message"])
+        fig = build_message_figure("등비수열 재구성 그래프", "입력값을 조정한 뒤 다시 그래프를 그려 보세요.")
+        render_plotly_animation(fig, "rec_geo_invalid", st.session_state["rec_geo_nonce"])
+        return
+
+    st.latex(rf"v_n = {result['sequence_latex']}")
+    st.latex(rf"y = {result['function_latex']}")
+
+    if not validate_finite_values(result["values"]):
+        st.warning("재구성한 값의 크기가 너무 커서 그래프를 안정적으로 표현하기 어렵습니다. 공비나 항의 개수를 조금 줄여 보세요.")
+        fig = build_message_figure("등비수열 재구성 그래프", "입력값을 조정하면 재구성 결과를 더 분명하게 볼 수 있습니다.")
+        render_plotly_animation(fig, "rec_geo_message", st.session_state["rec_geo_nonce"])
+        return
+
+    if st.session_state["rec_geo_drawn"]:
+        curve_x = np.linspace(1, max(count, 2), 240)
+        with np.errstate(over="ignore", invalid="ignore"):
+            curve_y = result["new_first"] * np.power(result["new_ratio"], curve_x - 1)
+        if not validate_finite_values(curve_y):
+            st.warning("연속 그래프 값이 너무 커서 표시가 어렵습니다. 항의 개수나 공비를 조금 줄여 보세요.")
+            fig = build_message_figure("등비수열 재구성 그래프", "입력값을 조정하면 지수적 규칙을 더 선명하게 볼 수 있습니다.")
+            render_plotly_animation(fig, "rec_geo_curve_message", st.session_state["rec_geo_nonce"])
+        else:
+            fig = build_animated_plot(
+                result["indices"],
+                result["values"],
+                curve_x,
+                curve_y,
+                "재구성한 등비수열과 대응하는 지수함수",
+                "재구성한 수열의 점",
+                "대응하는 지수함수",
+            )
+            render_plotly_animation(fig, "rec_geo_chart", st.session_state["rec_geo_nonce"])
+    else:
+        st.info("재구성 방식을 고른 뒤 `그래프 그리기`를 눌러 식과 그래프를 함께 확인해 보세요.")
+
+    preview_count = min(8, count)
+    st.dataframe(
+        make_term_dataframe(result["indices"][:preview_count], result["values"][:preview_count], "v_n"),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    summary_lines = [
+        f"새 수열의 일반항: v_n = {result['sequence_expr']}",
+        f"처음 몇 개 항: {', '.join(format_number(v) for v in result['values'][:preview_count])}",
+        f"첫째항과 공비: ({format_number(result['new_first'])}, {format_number(result['new_ratio'])})",
+        result["explanation"],
+        "재구성한 점들도 다시 하나의 지수함수적 패턴 위에 놓이는지 살펴보세요.",
+    ]
+    if result["ratio_note"]:
+        summary_lines.append(result["ratio_note"])
+    render_summary_card("재구성 결과", summary_lines)
+
+
+def render_learning_summary_tab() -> None:
+    """학습 정리 탭을 렌더링한다."""
+    cmp_a1 = float(st.session_state["cmp_arith_a1"])
+    cmp_d = float(st.session_state["cmp_arith_d"])
+    cmp_g1 = float(st.session_state["cmp_geo_g1"])
+    cmp_r = float(st.session_state["cmp_geo_r"])
+
+    rec_arith = reconstruct_arithmetic(
+        float(st.session_state["rec_arith_a1"]),
+        float(st.session_state["rec_arith_d"]),
+        int(st.session_state["rec_arith_n"]),
+        str(st.session_state["rec_arith_operation"]),
+        float(st.session_state["rec_arith_b1"]),
+        float(st.session_state["rec_arith_db"]),
+        float(st.session_state["rec_arith_k"]),
+    )
+    rec_geo = reconstruct_geometric(
+        float(st.session_state["rec_geo_g1"]),
+        float(st.session_state["rec_geo_r"]),
+        int(st.session_state["rec_geo_n"]),
+        str(st.session_state["rec_geo_operation"]),
+        float(st.session_state["rec_geo_h1"]),
+        float(st.session_state["rec_geo_s"]),
+        float(st.session_state["rec_geo_k"]),
+    )
+
+    render_summary_card(
+        "핵심 정리",
+        [
+            "등차수열은 자연수에서 정의된 일차적 규칙이므로 점들이 대응하는 일차함수 위에 놓입니다.",
+            "등비수열은 자연수에서 정의된 지수적 규칙이므로 점들이 대응하는 지수함수적 패턴을 따릅니다.",
+            "수열은 이산적 점, 함수는 연속 그래프라는 차이가 있지만 규칙의 구조를 통해 서로 연결해서 이해할 수 있습니다.",
+            "재구성한 결과도 첫째항과 공차·공비를 다시 읽어 보면 같은 유형의 규칙인지 판단할 수 있습니다.",
+        ],
+    )
+
+    left_col, right_col = st.columns(2, gap="large")
+    with left_col:
+        render_summary_card(
+            "현재 등차수열 요약",
+            [
+                f"비교 탐구 입력: a1={format_number(cmp_a1)}, d={format_number(cmp_d)}",
+                f"일반항: a_n = {arithmetic_expr_text(cmp_a1, cmp_d)}",
+                f"재구성 결과: u_n = {rec_arith['sequence_expr']}",
+                "공차가 일정하면 직선적 변화로 해석할 수 있습니다.",
+            ],
+        )
+    with right_col:
+        geo_lines = [
+            f"비교 탐구 입력: g1={format_number(cmp_g1)}, r={format_number(cmp_r)}",
+            "등비수열은 공비가 양수일 때 지수함수와 자연스럽게 연결됩니다.",
+        ]
+        if cmp_r > 0:
+            geo_lines.append(f"일반항: g_n = {geometric_expr_text(cmp_g1, cmp_r)}")
+        else:
+            geo_lines.append("현재 비교 탐구의 공비가 0 이하이므로 지수함수 연결은 잠시 보류됩니다.")
+        if rec_geo["valid"]:
+            geo_lines.append(f"재구성 결과: v_n = {rec_geo['sequence_expr']}")
+        else:
+            geo_lines.append("재구성 입력을 조정하면 등비수열의 재구성 결과를 다시 확인할 수 있습니다.")
+        render_summary_card("현재 등비수열 요약", geo_lines)
+
+    st.markdown("### 교사용 발문")
+    prompts = [
+        "등차수열의 점들이 왜 하나의 직선 위에 놓인다고 말할 수 있을까요?",
+        "수열은 점이고 함수는 연속 그래프인데, 두 대상을 연결해 이해하는 것이 왜 도움이 될까요?",
+        "두 등차수열의 합에서 공차가 왜 d+db가 되는지 n번째 항 식으로 설명해 볼까요?",
+        "두 등비수열의 곱이나 나눗셈에서 공비가 왜 rs, r/s가 되는지 식과 그래프를 함께 보며 말해 볼까요?",
+        "공비가 1인 경우와 공차가 0인 경우는 어떤 점에서 비슷하고 어떤 점에서 다를까요?",
+    ]
+    for prompt in prompts:
+        st.markdown(f"<div class='teacher-prompt'>{prompt}</div>", unsafe_allow_html=True)
+
+
 def main() -> None:
-    st.set_page_config(page_title="등차·등비수열 재구성 수업 앱", layout="wide")
-    inject_glassmorphism_css()
-    init_state()
+    """앱 전체를 렌더링한다."""
+    initialize_session_state()
+    inject_css()
     render_header()
 
-    tabs = st.tabs(["탭 1. 개념 연결", "탭 2. 비교 탐구", "탭 3. 재구성 실험", "탭 4. 학습 정리"])
+    tabs = st.tabs(["개념 연결", "비교 탐구", "재구성 실험", "학습 정리"])
 
     with tabs[0]:
-        render_tab_concept()
-    with tabs[1]:
-        render_tab_compare()
-    with tabs[2]:
-        render_tab_reconstruct()
-    with tabs[3]:
-        render_tab_summary()
+        render_concept_tab()
 
-    st.caption("Ausubel의 유의미 학습 원리(선행조직자-점진적 분화-통합적 조정-능동적 의미 형성)를 반영한 2차시 수업 앱")
+    with tabs[1]:
+        compare_tabs = st.tabs(["등차수열 ↔ 일차함수", "등비수열 ↔ 지수함수"])
+        with compare_tabs[0]:
+            render_arithmetic_compare_section()
+        with compare_tabs[1]:
+            render_geometric_compare_section()
+
+    with tabs[2]:
+        reconstruction_tabs = st.tabs(["등차수열 재구성", "등비수열 재구성"])
+        with reconstruction_tabs[0]:
+            render_arithmetic_reconstruction_section()
+        with reconstruction_tabs[1]:
+            render_geometric_reconstruction_section()
+
+    with tabs[3]:
+        render_learning_summary_tab()
 
 
 if __name__ == "__main__":
     main()
-
-# 실행 방법:
-# streamlit run streamlit_app.py
