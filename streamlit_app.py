@@ -179,6 +179,9 @@ def inject_css() -> None:
             backdrop-filter: blur(18px) saturate(150%);
             -webkit-backdrop-filter: blur(18px) saturate(150%);
         }
+        div[data-baseweb="tab-highlight"] {
+            display: none !important;
+        }
         button[data-baseweb="tab"] {
             border-radius: 18px;
             background: rgba(255, 255, 255, 0.34) !important;
@@ -525,11 +528,13 @@ def build_animated_plot(
     if len(point_x) == 0 or len(curve_x) == 0:
         return build_message_figure(title, "그래프를 만들 데이터가 아직 없습니다.")
 
+    animation_frame_ms = 46
+    animation_transition_ms = 18
     point_count = len(point_x)
     curve_count = len(curve_x)
-    frame_count = max(14, min(30, curve_count))
+    frame_count = max(20, min(42, max(curve_count // 5, point_count * 2)))
     y_min, y_max = compute_y_range(point_y, curve_y)
-    first_curve_index = max(2, curve_count // frame_count)
+    first_curve_index = max(3, int(math.ceil(curve_count / frame_count)))
     first_point_index = 1
 
     fig = go.Figure(
@@ -621,8 +626,8 @@ def build_animated_plot(
                         args=[
                             None,
                             {
-                                "frame": {"duration": 110, "redraw": True},
-                                "transition": {"duration": 0},
+                                "frame": {"duration": animation_frame_ms, "redraw": False},
+                                "transition": {"duration": animation_transition_ms, "easing": "linear"},
                                 "fromcurrent": True,
                                 "mode": "immediate",
                             },
@@ -635,7 +640,7 @@ def build_animated_plot(
                             [None],
                             {
                                 "frame": {"duration": 0, "redraw": False},
-                                "transition": {"duration": 0},
+                                "transition": {"duration": 0, "easing": "linear"},
                                 "mode": "immediate",
                             },
                         ],
@@ -646,8 +651,8 @@ def build_animated_plot(
                         args=[
                             ["frame_1"],
                             {
-                                "frame": {"duration": 0, "redraw": True},
-                                "transition": {"duration": 0},
+                                "frame": {"duration": 0, "redraw": False},
+                                "transition": {"duration": 0, "easing": "linear"},
                                 "mode": "immediate",
                             },
                         ],
