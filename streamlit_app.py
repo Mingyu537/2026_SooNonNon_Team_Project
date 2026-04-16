@@ -71,10 +71,11 @@ def inject_css() -> None:
         <style>
         .stApp {
             background:
-                radial-gradient(circle at top left, rgba(181, 212, 255, 0.45), transparent 28%),
-                radial-gradient(circle at top right, rgba(202, 227, 255, 0.38), transparent 22%),
-                linear-gradient(180deg, #eef5ff 0%, #e9f1fb 45%, #f7f9fc 100%);
-            color: #17324d;
+                radial-gradient(circle at 12% 10%, rgba(167, 205, 255, 0.55), transparent 22%),
+                radial-gradient(circle at 88% 14%, rgba(255, 214, 170, 0.42), transparent 18%),
+                linear-gradient(180deg, #f4f8ff 0%, #eef4fb 52%, #e8eef8 100%);
+            color: #16314d;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
         }
         .main .block-container {
             padding-top: 2rem;
@@ -82,31 +83,36 @@ def inject_css() -> None:
             max-width: 1200px;
         }
         .hero-card, .glass-card {
-            background: rgba(255, 255, 255, 0.62);
-            border: 1px solid rgba(255, 255, 255, 0.55);
-            box-shadow: 0 16px 40px rgba(68, 101, 140, 0.12);
-            border-radius: 24px;
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.44)),
+                linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            box-shadow:
+                0 18px 44px rgba(63, 93, 135, 0.12),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            border-radius: 28px;
+            backdrop-filter: blur(18px) saturate(155%);
+            -webkit-backdrop-filter: blur(18px) saturate(155%);
         }
         .hero-card {
-            padding: 1.6rem 1.8rem;
+            padding: 1.8rem 1.9rem;
             margin-bottom: 1.15rem;
         }
         .glass-card {
-            padding: 1.1rem 1.2rem;
+            padding: 1.15rem 1.25rem;
             margin-bottom: 1rem;
         }
         .hero-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #10263d;
+            font-size: 2.02rem;
+            font-weight: 800;
+            color: #142d47;
             margin-bottom: 0.35rem;
             line-height: 1.35;
+            letter-spacing: -0.03em;
         }
         .hero-subtitle {
             font-size: 1rem;
-            color: #36506c;
+            color: #3d5874;
             margin-bottom: 0.9rem;
         }
         .chip-row {
@@ -116,19 +122,21 @@ def inject_css() -> None:
         }
         .info-chip {
             display: inline-block;
-            padding: 0.35rem 0.8rem;
+            padding: 0.42rem 0.9rem;
             border-radius: 999px;
-            background: rgba(84, 138, 214, 0.12);
-            border: 1px solid rgba(84, 138, 214, 0.18);
-            color: #23496d;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(192, 218, 255, 0.24));
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            color: #234b73;
             font-size: 0.92rem;
             font-weight: 600;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
         }
         .section-title {
             font-size: 1.15rem;
             font-weight: 700;
-            color: #13304f;
+            color: #16314d;
             margin-bottom: 0.45rem;
+            letter-spacing: -0.02em;
         }
         .section-body {
             color: #35516e;
@@ -139,7 +147,7 @@ def inject_css() -> None:
             font-size: 1.05rem;
             font-weight: 700;
             margin-bottom: 0.45rem;
-            color: #123452;
+            color: #16314d;
         }
         .summary-list {
             margin: 0;
@@ -148,46 +156,128 @@ def inject_css() -> None:
             line-height: 1.65;
         }
         .small-note {
-            color: #54708d;
+            color: #59738f;
             font-size: 0.9rem;
         }
         .teacher-prompt {
-            background: rgba(240, 247, 255, 0.9);
-            border: 1px solid rgba(119, 163, 219, 0.22);
-            border-radius: 18px;
-            padding: 0.85rem 1rem;
+            background: linear-gradient(155deg, rgba(255, 255, 255, 0.74), rgba(240, 246, 255, 0.48));
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            border-radius: 22px;
+            padding: 0.95rem 1rem;
             margin-bottom: 0.7rem;
             color: #23435f;
+            box-shadow: 0 12px 28px rgba(88, 118, 158, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.78);
         }
         div[data-baseweb="tab-list"] {
-            gap: 0.35rem;
-            margin-bottom: 0.65rem;
+            gap: 0.45rem;
+            margin-bottom: 0.9rem;
+            padding: 0.38rem;
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.38));
+            border: 1px solid rgba(255, 255, 255, 0.76);
+            box-shadow: 0 12px 28px rgba(88, 118, 158, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+            backdrop-filter: blur(18px) saturate(150%);
+            -webkit-backdrop-filter: blur(18px) saturate(150%);
         }
         button[data-baseweb="tab"] {
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.45);
-            border: 1px solid rgba(160, 190, 225, 0.32);
-            padding: 0.55rem 0.95rem;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.34) !important;
+            border: 1px solid rgba(255, 255, 255, 0.0) !important;
+            min-height: 50px;
+            padding: 0.56rem 1.04rem 0.76rem 1.04rem !important;
+            color: #566b80 !important;
+            box-shadow: none !important;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+        button[data-baseweb="tab"] p,
+        button[data-baseweb="tab"] span,
+        button[data-baseweb="tab"] div {
+            color: #566b80 !important;
+            font-weight: 650 !important;
+        }
+        button[data-baseweb="tab"]:hover {
+            background: rgba(255, 255, 255, 0.48) !important;
+            border-color: rgba(255, 255, 255, 0.72) !important;
+            transform: translateY(-1px);
         }
         button[data-baseweb="tab"][aria-selected="true"] {
-            background: rgba(130, 176, 235, 0.22);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.54)),
+                linear-gradient(90deg, transparent 31%, #ff9e45 31%, #ff9e45 69%, transparent 69%) !important;
+            background-repeat: no-repeat, no-repeat !important;
+            background-size: 100% 100%, 42% 3px !important;
+            background-position: center center, center calc(100% - 7px) !important;
+            border-color: rgba(255, 255, 255, 0.82) !important;
+            box-shadow:
+                0 8px 22px rgba(84, 110, 150, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.92) !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] p,
+        button[data-baseweb="tab"][aria-selected="true"] span,
+        button[data-baseweb="tab"][aria-selected="true"] div {
+            color: #16314d !important;
         }
         .stButton > button {
-            border-radius: 14px;
-            border: 1px solid rgba(111, 156, 213, 0.25);
-            background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(233,243,255,0.94));
-            color: #163550;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.76);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(243, 248, 255, 0.54)),
+                linear-gradient(135deg, rgba(122, 169, 255, 0.08), rgba(255, 164, 80, 0.03));
+            color: #16314d;
             font-weight: 600;
-            box-shadow: 0 8px 20px rgba(92, 135, 188, 0.12);
+            box-shadow:
+                0 12px 26px rgba(92, 135, 188, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.82);
+            transition: all 0.22s ease;
+        }
+        .stButton > button:hover {
+            border-color: rgba(255, 255, 255, 0.86);
+            transform: translateY(-1px);
+            box-shadow:
+                0 16px 32px rgba(92, 135, 188, 0.16),
+                inset 0 1px 0 rgba(255, 255, 255, 0.88);
+        }
+        .stButton > button:focus {
+            box-shadow:
+                0 0 0 3px rgba(255, 155, 61, 0.16),
+                0 16px 32px rgba(92, 135, 188, 0.16),
+                inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
+        }
+        div[data-baseweb="input"] > div,
+        div[data-baseweb="select"] > div,
+        .stNumberInput > div > div,
+        .stTextInput > div > div {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(246, 250, 255, 0.56)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.76) !important;
+            border-radius: 18px !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.88),
+                0 10px 24px rgba(90, 124, 168, 0.08) !important;
+            backdrop-filter: blur(14px) saturate(150%);
+            -webkit-backdrop-filter: blur(14px) saturate(150%);
+        }
+        .stNumberInput label, .stSelectbox label {
+            color: #35516e;
+            font-weight: 650;
         }
         div[data-testid="stMetricValue"] {
-            color: #16324d;
+            color: #16314d;
         }
         div[data-testid="stDataFrame"] {
-            border-radius: 18px;
+            border-radius: 24px;
             overflow: hidden;
-            border: 1px solid rgba(180, 204, 231, 0.35);
-            box-shadow: 0 10px 30px rgba(80, 118, 168, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.74);
+            box-shadow:
+                0 16px 36px rgba(80, 118, 168, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.78);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+        div[data-testid="stAlert"] {
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.74);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 250, 255, 0.48));
+            box-shadow: 0 12px 28px rgba(88, 118, 158, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.84);
         }
         </style>
         """,
@@ -1325,29 +1415,25 @@ def main() -> None:
     inject_css()
     render_header()
 
-    tabs = st.tabs(["개념 연결", "비교 탐구", "재구성 실험", "학습 정리"])
+    tabs = st.tabs(["비교 탐구", "재구성 실험", "학습 정리"])
 
     with tabs[0]:
-        render_concept_tab()
-
-    with tabs[1]:
         compare_tabs = st.tabs(["등차수열 ↔ 일차함수", "등비수열 ↔ 지수함수"])
         with compare_tabs[0]:
             render_arithmetic_compare_section()
         with compare_tabs[1]:
             render_geometric_compare_section()
 
-    with tabs[2]:
+    with tabs[1]:
         reconstruction_tabs = st.tabs(["등차수열 재구성", "등비수열 재구성"])
         with reconstruction_tabs[0]:
             render_arithmetic_reconstruction_section()
         with reconstruction_tabs[1]:
             render_geometric_reconstruction_section()
 
-    with tabs[3]:
+    with tabs[2]:
         render_learning_summary_tab()
 
 
 if __name__ == "__main__":
     main()
-    
