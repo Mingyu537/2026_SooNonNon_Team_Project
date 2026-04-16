@@ -528,8 +528,8 @@ def build_animated_plot(
     if len(point_x) == 0 or len(curve_x) == 0:
         return build_message_figure(title, "그래프를 만들 데이터가 아직 없습니다.")
 
-    animation_frame_ms = 46
-    animation_transition_ms = 18
+    animation_frame_ms = 23
+    animation_transition_ms = 9
     point_count = len(point_x)
     curve_count = len(curve_x)
     frame_count = max(20, min(42, max(curve_count // 5, point_count * 2)))
